@@ -1,0 +1,15 @@
+{
+  "name": "Skogsbruksplan 65-407-1-27",
+  "short_name": "Skogsplan",
+  "description": "Skogsbruksplan med bestånd, åtgärder, GPS och Lantmäteriverkets kartor",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#2e5e3e",
+  "theme_color": "#2e5e3e",
+  "icons": [
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}
