@@ -46,6 +46,22 @@ main{flex:1;min-height:0;display:grid;grid-template-columns:1fr 410px}
 .loginbox label{display:grid;gap:4px;font-size:13px;color:var(--mut)}
 .loginbox input{font:inherit;font-size:16px;padding:11px 12px;border:1px solid #c4cbc0;border-radius:8px;color:var(--ink)}
 #loginmsg{font-size:13px;color:var(--warn);min-height:1.2em}
+.rem{background:#fff;border:1px solid var(--line);border-left:4px solid #999;border-radius:8px;padding:8px 10px;margin:6px 0}
+.rem .rt{font-weight:600}
+.rem-red{border-left-color:#c62828;background:#fff6f5}
+.rem-amber{border-left-color:#f9a825;background:#fffbea}
+.rem-info{border-left-color:#1e88e5;background:#f4f9ff}
+.rem .links{display:flex;gap:12px;margin-top:4px;font-size:12px}
+.modal{position:fixed;inset:0;z-index:4000;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:14px}
+.modal[hidden]{display:none}
+.modal .box{background:#fff;border-radius:12px;padding:18px;max-width:440px;width:100%;max-height:92vh;overflow:auto;display:grid;gap:12px}
+.modal label{display:grid;gap:4px;font-size:13px;color:var(--mut)}
+.modal input,.modal select,.modal textarea{font:inherit;font-size:16px;padding:9px 10px;border:1px solid #c4cbc0;border-radius:6px;color:var(--ink);background:#fff;width:100%}
+#drawbar{position:absolute;left:50%;transform:translateX(-50%);bottom:22px;z-index:1000;background:rgba(255,255,255,.97);border:1px solid #e91e63;border-radius:12px;padding:8px 10px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:center;box-shadow:0 1px 8px rgba(0,0,0,.25);max-width:94%}
+#drawbar[hidden]{display:none}
+#drawbar button{font:inherit;font-size:13px;padding:6px 10px;border-radius:7px;border:1px solid var(--g);background:#fff;color:var(--g);cursor:pointer}
+#drawbar button.go{background:var(--g);color:#fff}
+#map.drawing,#map.drawing .leaflet-grab,#map.drawing .leaflet-interactive,#map.drawing.leaflet-dragging .leaflet-grab{cursor:crosshair !important}
 .keyrow{display:flex;gap:6px;margin:6px 0}
 .keyrow input{flex:1;min-width:0;font:inherit;padding:6px 8px;border:1px solid #c4cbc0;border-radius:6px}
 #legend{position:absolute;left:10px;bottom:22px;z-index:1000;background:rgba(255,255,255,.95);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12px;box-shadow:0 1px 6px rgba(0,0,0,.15)}
@@ -160,11 +176,14 @@ aside.mini .pane,aside.mini .tabs{display:none}
         <div class="row"><input type="checkbox" id="lrnat"><label for="lrnat">Naturreservat</label></div>
         <div class="row"><input type="checkbox" id="lrn2k"><label for="lrn2k">Natura 2000</label></div>
       </details>
+      <button class="btn sec" id="drawbtn" type="button">Rita eget bestånd</button>
+      <div class="row"><input type="checkbox" id="coordchk"><label for="coordchk">Koordinater vid klick/tryck</label></div>
       <div class="row"><input type="checkbox" id="lblchk" checked><label for="lblchk">Figurnummer (zooma in)</label></div>
       <button class="btn sec" id="fitbtn" type="button">Visa hela fastigheten</button>
     </div></div>
     <div id="legend"></div>
     <button id="gpsinfo" type="button" hidden></button>
+    <div id="drawbar" hidden><span id="drawinfo" class="small"></span><button id="drawundo" type="button">Ångra</button><button id="drawgps" type="button">+ Min position</button><button id="drawdone" class="go" type="button">Klar</button><button id="drawcancel" type="button">Avbryt</button></div>
   </div>
   <aside>
     <div class="sizebar" id="sizebar"><button id="sizedown" type="button">▼ Mindre</button><button id="sizeup" type="button">▲ Maximera</button><button id="sizehide" type="button">Dölj meny ▾</button></div>
@@ -180,6 +199,8 @@ aside.mini .pane,aside.mini .tabs{display:none}
     <section class="pane" id="pane-data"></section>
   </aside>
 </main>
+<div id="prepdlg" class="modal" hidden><div class="box" id="prepbox" style="max-width:580px"></div></div>
+<div id="standdlg" class="modal" hidden><div class="box" id="standdlgbox"></div></div>
 <div id="loginview" hidden>
   <div class="loginbox">
     <div><b style="font-size:18px">Skogsbruksplan</b><div class="small muted">Fastighet 65-407-1-27</div></div>
@@ -189,6 +210,7 @@ aside.mini .pane,aside.mini .tabs{display:none}
       <button class="btn" id="loginbtn" type="submit">Logga in</button>
     </form>
     <div id="loginmsg"></div>
+    <button class="btn sec" id="loginretry" type="button" hidden>Försök igen</button>
     <button class="lnk" id="loginlocal" type="button" hidden>Fortsätt utan inloggning (endast den här enheten)</button>
   </div>
 </div>
@@ -199,17 +221,21 @@ let STANDS = {"type":"FeatureCollection","features":[]};
 const STANDS_EMBEDDED = STANDS.features.length>0;   // i den publika webbversionen är beståndsdatan inte inbyggd utan hämtas efter inloggning
 const PROP = '65-407-1-27';
 const LS_KEY = 'skogsplan:' + PROP + ':v1';
-const ACTION_TYPES = ['Plantering','Markberedning','Slyröjning','Iståndsättningsröjning','Gallring','Slutavverkning','Annat'];
-const VOL_TYPES = ['Gallring','Slutavverkning','Annat'];
+const ACTION_TYPES = ['Plantering','Markberedning','Slyröjning','Iståndsättningsröjning','Gallring','Avlägsnande av överståndare','Slutavverkning','Annat'];
+const VOL_TYPES = ['Gallring','Avlägsnande av överståndare','Slutavverkning','Annat'];
+const APP_VERSION='2026-11-13 (omgång 3)';
+const AVVERKARE=['Ålands Skogsindustrier Ab','SkogAx Åland Ab','Privat','Okänd'];
+const MAIN_TREES=['Tall','Gran','Björk'];
+const SPECIAL_TREES=['Glasbjörk','Klibbal','Ek','Lönn','Ask','Alm','Lind'];
 /* Förslag på kommande åtgärder (yrs = år efter den åtgärd som lagts in). Nyckel: Åtgärd eller Åtgärd|Detalj */
 const FOLLOW = {
-  'Plantering':[{type:'Slyröjning',yrs:5}],
+  'Plantering':[{type:'Slyröjning',yrs:5},{type:'Slutavverkning',dyn:'mogen'}],
   'Slyröjning':[{type:'Iståndsättningsröjning',yrs:10,note:'Osäkert intervall – justera efter besök'}],
   'Markberedning':[{type:'Plantering',yrs:1}],
   'Iståndsättningsröjning':[{type:'Gallring',sub:'Förstagallring',yrs:10}],
   'Gallring|Förstagallring':[{type:'Gallring',sub:'Andra gallring',yrs:10}],
-  'Gallring|Andra gallring':[{type:'Slutavverkning',yrs:10}],
-  'Gallring|Sengallring':[{type:'Slutavverkning',yrs:10}],
+  'Gallring|Andra gallring':[{type:'Slutavverkning',dyn:'mogen'}],
+  'Gallring|Sengallring':[{type:'Slutavverkning',dyn:'mogen'}],
   'Slutavverkning|Kalyta':[{type:'Markberedning',yrs:0},{type:'Plantering',yrs:1}],
   'Slutavverkning|Fröträdsställning':[{type:'Markberedning',yrs:0},{type:'Slutavverkning',sub:'Kalyta',yrs:10,note:'Avveckla fröträden'}],
   'Slutavverkning|Skärmställning':[{type:'Markberedning',yrs:0},{type:'Slutavverkning',sub:'Kalyta',yrs:10,note:'Avveckla skärmen'}]
@@ -232,7 +258,16 @@ const label = p=>`Figur ${p.fig} · Standid ${p.id}`;
 const volTot = (p,k='vol')=>p[k]*p.ha;
 let actions = [];
 let edits = {};
-let followYrs = {};   // egna intervall: 'nyckel#index' -> år
+let followYrs = {};
+let plots = [];          // provytor (relaskop och plantor)
+let customStands = [];  // egna bestånd som ritats i kartan
+let contact = {};       // ägarens kontaktuppgifter för beslut (delas med din bror)
+let remDone = {};   // avklarade påminnelser: nyckel -> datum
+const sanitizeCustom=arr=>(Array.isArray(arr)?arr:[]).filter(c=>c&&Number.isFinite(+c.id)&&Array.isArray(c.ring)&&c.ring.length>=3&&c.ring.every(p=>Array.isArray(p)&&isFinite(p[0])&&isFinite(p[1]))&&c.props&&typeof c.props==='object').map(c=>({id:+c.id,ring:c.ring.map(p=>[+p[0],+p[1]]),props:c.props,created:c.created||''}));
+const sanitizePlots=arr=>(Array.isArray(arr)?arr:[]).filter(p=>p&&p.id&&Number.isFinite(+p.standId)&&(p.kind==='relaskop'||p.kind==='plant')).map(p=>({...p,standId:+p.standId}));
+const CONTACT_FIELDS=['fornamn','efternamn','adress','postnr','postort','tel','epost'];
+const sanitizeContact=o=>{const r={};if(o&&typeof o==='object')CONTACT_FIELDS.forEach(k=>{if(typeof o[k]==='string')r[k]=o[k].slice(0,200);});return r;};
+const sanitizeRem=o=>{const r={};if(o&&typeof o==='object')for(const [k,v] of Object.entries(o))if(typeof v==='string'&&k.length<140)r[k]=v;return r;};   // egna intervall: 'nyckel#index' -> år
 const ruleYrs=(key,i,def)=>typeof followYrs[key+'#'+i]==='number'?followYrs[key+'#'+i]:def;
 function sanitizeFollow(o){
   const r={};
@@ -249,17 +284,18 @@ function sanitizeEdits(o){
   const r={};
   if(o&&typeof o==='object')for(const [k,v] of Object.entries(o)){
     const id=+k;
-    if(Number.isFinite(id)&&v&&typeof v==='object'){const e={};for(const f of [...EDIT_FIELDS,'age','note'])if(f in v)e[f]=v[f];if(Object.keys(e).length)r[id]=e;}
+    if(Number.isFinite(id)&&v&&typeof v==='object'){const e={};for(const f of [...EDIT_FIELDS,'age','ageYear','dbh','g','skogstyp','note'])if(f in v)e[f]=v[f];if(Object.keys(e).length)r[id]=e;}
   }
   return r;
 }
 function eff(id){const b=baseOf(id),e=edits[id];return e?{...b,...e}:b;}
 function loadActions(){
-  try{const s=localStorage.getItem(LS_KEY);if(s){const o=JSON.parse(s);if(Array.isArray(o.actions))actions=o.actions.filter(a=>a&&a.id);edits=sanitizeEdits(o.edits);followYrs=sanitizeFollow(o.follow);}}
+  try{const s=localStorage.getItem(LS_KEY);if(s){const o=JSON.parse(s);if(Array.isArray(o.actions))actions=o.actions.filter(a=>a&&a.id);edits=sanitizeEdits(o.edits);followYrs=sanitizeFollow(o.follow);remDone=sanitizeRem(o.rem);plots=sanitizePlots(o.plots);customStands=sanitizeCustom(o.custom);contact=sanitizeContact(o.contact);}}
   catch(e){console.warn('Kunde inte läsa sparade åtgärder',e);}
 }
 function persistLocal(){
-  try{localStorage.setItem(LS_KEY,JSON.stringify({version:3,saved:new Date().toISOString(),actions,edits,follow:followYrs}));}
+  try{if(CLOUD.cfg&&!CLOUD.user)localStorage.setItem('skogsplan:local-dirty','1');}catch(e){}
+  try{localStorage.setItem(LS_KEY,JSON.stringify({version:5,saved:new Date().toISOString(),actions,edits,follow:followYrs,rem:remDone,plots,custom:customStands,contact}));}
   catch(e){toast('Kunde inte spara i webbläsaren – ta en backup under fliken Data');}
 }
 function saveActions(){persistLocal();cloudPush();}
@@ -273,7 +309,7 @@ function actStatus(id){
 /* ---------- themes ---------- */
 const GRP={'Skogsmark':'#2e7d32','Tvinmark':'#f2b134','Impediment':'#8d6e63'};
 const UTV={'Yngre plantbestånd':'#aed581','Äldre plantbestånd':'#7cb342','Plantbestånd med överståndare':'#c0ca33','Klenare gallringsbestånd':'#4db6ac','Grövre gallringsbestånd':'#00796b','Förnyelsemogen skog':'#e65100','Ej klassad':'#b0b5ae'};
-const TSL={'Tall':'#2e7d32','Gran':'#1565c0','Lövträd':'#f2b134','Ej angivet':'#b0b5ae'};
+const TSL={'Tall':'#2e7d32','Gran':'#1565c0','Lövträd':'#f2b134','Vårtbjörk':'#e8a33d','Ej angivet':'#b0b5ae'};
 const VB=[[0,50,'#edf3df','< 50'],[50,100,'#c9e2a4','50–100'],[100,150,'#8fc86b','100–150'],[150,200,'#4fa65a','150–200'],[200,250,'#2a7d45','200–250'],[250,1e9,'#145a32','≥ 250']];
 const ACT={'Ingen':'#c4c9c0','Planerad':'#1e88e5','Utförd':'#43a047','Planerad + utförd':'#8e24aa'};
 const THEMES={
@@ -287,6 +323,7 @@ let theme='grp', fillOp=.55, selId=null, legendOpen=true;
 
 /* ---------- map ---------- */
 const map = L.map('map',{maxZoom:19});
+map.setView([60.37,19.74],12);   // startvy över norra Åland tills beståndsdatan har lästs in
 const BUILTIN_KEY='';   // Lantmäteriverkets API-nyckel (kan bytas eller tas bort under Data)
 let mmlKey='';
 let prefs={base:'sat',prop:false,ids:false};
@@ -433,15 +470,149 @@ const ArcTile=L.TileLayer.extend({
 });
 const lrLayers={forn:null,nat:null,n2k:null};
 let lrErr=0;
+function lrImageOn(k){
+  const l=new ArcTile(LR_DEFS[k],{pane:'lrOverlay',minZoom:9,maxZoom:19,opacity:.8,attribution:'© Ålands landskapsregering'});
+  l.on('tileerror',()=>{if(Date.now()-lrErr>15000){lrErr=Date.now();toast('Kunde inte hämta kartlager från landskapsregeringen – kontrollera internetanslutningen');}});
+  lrLayers[k]=l.addTo(map);
+}
 function setLR(k,on){
   if(lrLayers[k]){map.removeLayer(lrLayers[k]);lrLayers[k]=null;}
-  if(on){
-    const l=new ArcTile(LR_DEFS[k],{pane:'lrOverlay',minZoom:9,maxZoom:19,opacity:.8,attribution:'© Ålands landskapsregering'});
-    l.on('tileerror',()=>{if(Date.now()-lrErr>15000){lrErr=Date.now();toast('Kunde inte hämta kartlager från landskapsregeringen – kontrollera internetanslutningen');}});
-    lrLayers[k]=l.addTo(map);
-  }
+  if(LRV.groups[k]){map.removeLayer(LRV.groups[k]);LRV.groups[k]=null;}
   $('#lr'+k).checked=on;prefs[k]=on;savePrefs();
+  if(on)lrvLoad(k);
 }
+/* ---------- Landskapsregeringens objekt som vektorer: tydliga markeringar, skraffering och lista ---------- */
+map.createPane('lrVec');map.getPane('lrVec').style.zIndex=455;
+const LRV_DEFS={
+  forn:{svc:'Kulturarv/Fornminnen',layers:[{id:0,name:'Skyddsområde (fornminne)',kind:'zone'},{id:1,name:'Fornminne',kind:'obj'}]},
+  nat:{svc:'Miljo/ALR_Naturreservat',layers:[{id:1,name:'Naturreservat',kind:'reserve'}]},
+  n2k:{svc:'INSPIRE/ALR_Skyddsomraden',layers:[{id:0,name:'Natura 2000',kind:'n2k'}]}
+};
+const LRV={data:{forn:null,nat:null,n2k:null},groups:{forn:null,nat:null,n2k:null},markers:[]};
+async function lrvFetch(k){
+  const def=LRV_DEFS[k],b=(bounds&&bounds.isValid())?bounds.pad(0.5):map.getBounds();
+  const env=[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()].join(',');
+  const out=[];
+  for(const ly of def.layers){
+    const url=`${LR}${def.svc}/MapServer/${ly.id}/query?where=1%3D1&geometry=${env}&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true&outSR=4326&f=geojson`;
+    const r=await fetch(url);
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const j=await r.json();
+    if(!j||!Array.isArray(j.features))throw new Error('Oväntat svar');
+    j.features.forEach(f=>{if(f&&f.geometry){f.properties=f.properties||{};f.__layer=ly;out.push(f);}});
+  }
+  return out;
+}
+const LRV_STYLE={
+  obj:{color:'#880e4f',weight:3,fillColor:'#d81b60',fillOpacity:.45},
+  zone:{color:'#d81b60',weight:1.8,dashArray:'6 4',fillColor:'#d81b60',fillOpacity:.1},
+  reserve:{color:'#1b5e20',weight:2,fillColor:'#2e7d32',fillOpacity:.15},
+  n2k:{color:'#0d47a1',weight:2,fillColor:'#1565c0',fillOpacity:.12}
+};
+function lrvPopup(f,name){
+  const rows=Object.entries(f.properties).filter(([k,v])=>v!==null&&v!==''&&!/^(OBJECTID|FID|Shape|SHAPE|created_|last_edited_|GlobalID)/i.test(k)).map(([k,v])=>{
+    let val=(typeof v==='number'&&v>1e11&&/datum|date|tid|reg/i.test(k))?new Date(v).toLocaleDateString('sv-SE'):String(v);
+    if(val.length>400)val=val.slice(0,400)+'…';
+    return `<tr><td style="color:#666;padding-right:8px;vertical-align:top">${esc(k)}</td><td>${esc(val)}</td></tr>`;
+  }).join('');
+  return `<b>${esc(name)}</b><table style="font-size:12px;margin:4px 0">${rows}</table>`;
+}
+function lrvMarker(f,ll,ly){
+  const m=L.circleMarker(ll,{pane:'lrVec',radius:8,color:'#fff',weight:2.5,fillColor:'#d81b60',fillOpacity:1});
+  m.bindPopup(()=>lrvPopup(f,ly.name),{maxWidth:320});
+  f.__marker=m;
+  return m;
+}
+function featCenter(f){
+  if(f.geometry.type==='Point')return L.latLng(f.geometry.coordinates[1],f.geometry.coordinates[0]);
+  return L.geoJSON(f).getBounds().getCenter();
+}
+function ensureHatchDefs(svg){
+  if(!svg||svg.querySelector('#hatchNat'))return;
+  const ns='http://www.w3.org/2000/svg',defs=document.createElementNS(ns,'defs');
+  defs.innerHTML='<pattern id="hatchNat" patternUnits="userSpaceOnUse" width="9" height="9" patternTransform="rotate(45)"><rect width="9" height="9" fill="rgba(46,125,50,.10)"/><line x1="0" y1="0" x2="0" y2="9" stroke="#1b5e20" stroke-width="2.4" stroke-opacity=".9"/></pattern><pattern id="hatchN2k" patternUnits="userSpaceOnUse" width="10" height="10" patternTransform="rotate(-45)"><rect width="10" height="10" fill="rgba(21,101,192,.08)"/><line x1="0" y1="0" x2="0" y2="10" stroke="#0d47a1" stroke-width="1.8" stroke-dasharray="5 3" stroke-opacity=".9"/></pattern>';
+  svg.insertBefore(defs,svg.firstChild);
+}
+function lrvHatch(grp,kind){
+  const pat=kind==='reserve'?'hatchNat':kind==='n2k'?'hatchN2k':null;
+  if(!pat)return;
+  const walk=l=>{
+    if(l.eachLayer&&!l._path){l.eachLayer(walk);return;}
+    if(l._path){const svg=l._renderer&&l._renderer._container;ensureHatchDefs(svg);l._path.setAttribute('fill','url(#'+pat+')');l._path.setAttribute('fill-opacity','1');}
+  };
+  grp.eachLayer(walk);
+}
+function lrvRender(k,feats){
+  const grp=L.layerGroup();
+  feats.forEach(f=>{
+    const ly=f.__layer,g=L.geoJSON(f,{pane:'lrVec',interactive:ly.kind==='obj'&&f.geometry.type==='Point',style:()=>LRV_STYLE[ly.kind],pointToLayer:(ft,ll)=>lrvMarker(f,ll,ly)});
+    grp.addLayer(g);
+    if(ly.kind==='obj'&&f.geometry.type!=='Point')grp.addLayer(lrvMarker(f,featCenter(f),ly));
+  });
+  return grp;
+}
+async function lrvLoad(k){
+  try{
+    if(!LRV.data[k])LRV.data[k]=await lrvFetch(k);
+    if(!prefs[k]||LRV.groups[k])return;
+    const grp=lrvRender(k,LRV.data[k]).addTo(map);
+    LRV.groups[k]=grp;
+    const kind=LRV_DEFS[k].layers[0].kind;
+    if(kind==='reserve'||kind==='n2k')lrvHatch(grp,kind);
+    if(k==='forn'&&tView==='forn')renderTable();
+  }catch(e){
+    if(prefs[k]&&!lrLayers[k]&&!LRV.groups[k]){lrImageOn(k);toast('Kunde inte hämta objekten från landskapsregeringen. Visar bilder i stället, utan lista.');}
+  }
+}
+/* lista över fornminnen */
+let tView='stands',fornNear=true;
+function fornTitle(p,i,fb){
+  const keys=Object.keys(p);
+  const pick=re=>{const k=keys.find(x=>re.test(x)&&p[x]!==null&&p[x]!==''&&typeof p[x]!=='object');return k?String(p[k]):'';};
+  return pick(/namn|name|nimi|benämn/i)||pick(/^text$|beskriv/i)||pick(/forn.*id|id/i)||((fb||'Fornminne')+' '+(i+1));
+}
+function fornType(p){const k=Object.keys(p).find(x=>/typ|art|kategori|klass/i.test(x)&&p[x]!==null&&p[x]!==''&&typeof p[x]!=='object');return k?String(p[k]):'';}
+function mDist(a,b,c,d){const R=6371000,t=x=>x*Math.PI/180,dl=t(c-a),dn=t(d-b),h=Math.sin(dl/2)**2+Math.cos(t(a))*Math.cos(t(c))*Math.sin(dn/2)**2;return 2*R*Math.asin(Math.sqrt(h));}
+function minDistToStands(lat,lon,ids){
+  const k=Math.cos(lat*Math.PI/180),px=lon*k*111320,py=lat*110574;let best=Infinity;
+  const list=ids?ids.map(i=>byId.get(i)).filter(Boolean):STANDS.features;
+  for(const f of list){
+    for(const poly of f.geometry.coordinates){
+      if(polyContains(poly,[lon,lat]))return 0;
+      for(const ring of poly){for(let i=0,j=ring.length-1;i<ring.length;j=i++){
+        const a=ring[i],b=ring[j];
+        const d=Math.sqrt(ptSegD2(px,py,a[0]*k*111320,a[1]*110574,b[0]*k*111320,b[1]*110574));if(d<best)best=d;}}
+    }
+  }
+  return best;
+}
+function fornItems(){
+  const feats=(LRV.data.forn||[]).filter(f=>f.__layer.kind==='obj');
+  return feats.map((f,i)=>{const c=featCenter(f);return {f,i,title:fornTitle(f.properties,i),type:fornType(f.properties),lat:c.lat,lng:c.lng,dStand:minDistToStands(c.lat,c.lng),dGps:gpsLast?mDist(gpsLast[0],gpsLast[1],c.lat,c.lng):null};});
+}
+function renderFornView(el){
+  const seg=tviewHTML();
+  if(!LRV.data.forn){
+    el.innerHTML=seg+`<p class="small muted">Fornminneslagret är inte laddat. ${prefs.forn?'Laddar…':'Slå på det för att få listan.'}</p>${prefs.forn?'':'<p><button class="btn" data-do="loadforn">Slå på fornminnen</button></p>'}`;
+    return;
+  }
+  let items=fornItems();
+  if(fornNear)items=items.filter(x=>x.dStand<=500);
+  items.sort((a,b)=>(gpsLast?a.dGps-b.dGps:a.dStand-b.dStand));
+  el.innerHTML=seg+`<div class="filters"><label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="fornnear" ${fornNear?'checked':''}> Endast inom 500 m från bestånden</label></div>
+    <p class="small muted">${items.length} fornminnen. ${gpsLast?'Sorterade efter avstånd från din position.':'Sorterade efter avstånd från närmaste bestånd. Slå på GPS för avstånd från din position.'}</p>
+    ${items.map(x=>`<button class="lnk" style="display:block;text-align:left;text-decoration:none;color:inherit;width:100%;padding:7px 0;border-bottom:1px solid var(--line)" data-do="fornto" data-i="${x.i}"><b>${esc(x.title)}</b>${x.type?` <span class="muted">· ${esc(x.type)}</span>`:''}<br><span class="small muted">${gpsLast?`${nf(x.dGps,0)} m från dig · `:''}${x.dStand===0?'inom bestånd':nf(x.dStand,0)+' m från bestånd'}</span></button>`).join('')||'<p class="muted">Inga fornminnen inom 500 m från bestånden.</p>'}`;
+  const cb=$('#fornnear');if(cb)cb.onchange=e=>{fornNear=e.target.checked;renderTable();};
+}
+function tviewHTML(){
+  return `<div class="filters"><button class="btn ${tView==='stands'?'':'sec'}" data-do="tview" data-v="stands" style="flex:1">Bestånd</button><button class="btn ${tView==='forn'?'':'sec'}" data-do="tview" data-v="forn" style="flex:1">Fornminnen</button></div>`;
+}
+function fornTo(i){
+  const x=fornItems().find(y=>y.i===i);if(!x)return;
+  if(isMobile())setSize(1);
+  setTimeout(()=>{map.setView([x.lat,x.lng],Math.max(map.getZoom(),18));if(x.f.__marker)x.f.__marker.openPopup();},80);
+}
+
 let identWarned=false;
 function popupHTML(items){
   return items.map(it=>{
@@ -472,10 +643,43 @@ async function identifyLR(e){
 map.on('click',identifyLR);
 
 
+
+/* ---------- koordinater vid tryck ---------- */
+function lonLatToTm35(lon,lat){
+  const a=6378137,f=1/298.257222101,k0=0.9996,lon0=27*Math.PI/180,FE=500000;
+  const n=f/(2-f),A=a/(1+n)*(1+n*n/4+n**4/64),e=Math.sqrt(f*(2-f));
+  const al=[n/2-2*n*n/3+5*n**3/16+41*n**4/180,13*n*n/48-3*n**3/5+557*n**4/1440,61*n**3/240-103*n**4/140,49561*n**4/161280];
+  const phi=lat*Math.PI/180,lam=lon*Math.PI/180-lon0;
+  const t=Math.sinh(Math.atanh(Math.sin(phi))-e*Math.atanh(e*Math.sin(phi)));
+  const xi1=Math.atan2(t,Math.cos(lam)),eta1=Math.atanh(Math.sin(lam)/Math.sqrt(1+t*t));
+  let xi=xi1,eta=eta1;
+  for(let j=1;j<=4;j++){xi+=al[j-1]*Math.sin(2*j*xi1)*Math.cosh(2*j*eta1);eta+=al[j-1]*Math.cos(2*j*xi1)*Math.sinh(2*j*eta1);}
+  return [FE+k0*A*eta,k0*A*xi];
+}
+let coordMode=false;
+function coordPopup(ll){
+  const [E,N]=lonLatToTm35(ll.lng,ll.lat);
+  const wgs=`${ll.lat.toFixed(5)}, ${ll.lng.toFixed(5)}`,tm=`${Math.round(E)}, ${Math.round(N)}`;
+  const sid=standAt(ll.lng,ll.lat),q=sid!=null?eff(sid):null;
+  const html=`<div style="min-width:200px"><b>Koordinater</b>
+    <table style="font-size:12px;margin:4px 0"><tr><td style="color:#666;padding-right:8px">WGS84 (N, E)</td><td>${esc(wgs)}</td></tr>
+    <tr><td style="color:#666;padding-right:8px">ETRS-TM35FIN (E, N)</td><td>${esc(tm)}</td></tr>
+    <tr><td style="color:#666;padding-right:8px">Bestånd</td><td>${q?`Figur ${q.fig} (Standid ${q.id})`:'Utanför bestånden'}</td></tr></table>
+    <button class="lnk" data-do="copytxt" data-txt="${esc(wgs)}">Kopiera WGS84</button> · <button class="lnk" data-do="copytxt" data-txt="${esc(tm)}">Kopiera TM35FIN</button></div>`;
+  L.popup({maxWidth:300}).setLatLng(ll).setContent(html).openOn(map);
+}
+map.on('click',e=>{if(coordMode&&!drawMode)coordPopup(e.latlng);});
+map.on('contextmenu',e=>{if(!drawMode)coordPopup(e.latlng);});
+function copyText(t){
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(()=>toast('Kopierat: '+t)).catch(()=>window.prompt('Kopiera:',t));
+  else window.prompt('Kopiera:',t);
+}
+
 /* ---------- GPS: visa var du står ---------- */
 map.createPane('gps');
 map.getPane('gps').style.zIndex=660;
 map.getPane('gps').style.pointerEvents='none';
+let drawMode=false;
 let gpsState=0,gpsWatch=null,gpsDot=null,gpsAcc=null,gpsLast=null,gpsCentered=false;
 function pip(pt,ring){
   let inside=false;
@@ -560,18 +764,71 @@ $('#gpsinfo').onclick=()=>{const id=$('#gpsinfo').dataset.sid;if(id)select(+id,{
 const layers = new Map();
 function styleFor(f){
   const p=eff(f.properties.id),sel=p.id===selId;
-  return {color:sel?'#111':'#fff',weight:sel?3.5:1,opacity:1,fillColor:THEMES[theme].color(p),fillOpacity:fillOp};
+  return {color:sel?'#111':'#fff',weight:sel?3.5:1,opacity:1,fillColor:THEMES[theme].color(p),fillOpacity:fillOp,dashArray:p.custom?'6 4':null};
 }
 const gj = L.geoJSON(null,{
   style:styleFor,
   onEachFeature:(f,l)=>{
     layers.set(f.properties.id,l);
-    l.bindTooltip(String(f.properties.fig),{permanent:true,direction:'center',className:'figlabel'});
-    l.on('click',()=>select(f.properties.id,{}));
+    l.on('click',()=>{if(!drawMode&&!coordMode)select(f.properties.id,{});});
     l.on('mouseover',()=>{if(f.properties.id!==selId)l.setStyle({weight:2.5,color:'#222'});});
     l.on('mouseout',()=>l.setStyle(styleFor(f)));
   }
 }).addTo(map);
+
+/* ---------- etiketter: punkt som alltid ligger inne i figuren (polylabel) ---------- */
+const labelGroup=L.layerGroup().addTo(map);
+function ptSegD2(px,py,ax,ay,bx,by){
+  let x=ax,y=ay,dx=bx-x,dy=by-y;
+  if(dx!==0||dy!==0){const t=((px-x)*dx+(py-y)*dy)/(dx*dx+dy*dy);if(t>1){x=bx;y=by;}else if(t>0){x+=dx*t;y+=dy*t;}}
+  dx=px-x;dy=py-y;return dx*dx+dy*dy;
+}
+function ptPolyDist(px,py,rings){
+  let inside=false,min=Infinity;
+  for(const ring of rings){
+    for(let i=0,j=ring.length-1;i<ring.length;j=i++){
+      const a=ring[i],b=ring[j];
+      if(((a[1]>py)!==(b[1]>py))&&(px<(b[0]-a[0])*(py-a[1])/(b[1]-a[1])+a[0]))inside=!inside;
+      min=Math.min(min,ptSegD2(px,py,a[0],a[1],b[0],b[1]));
+    }
+  }
+  return (inside?1:-1)*Math.sqrt(min);
+}
+function polyLabel(rings,prec){
+  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  for(const p of rings[0]){minX=Math.min(minX,p[0]);minY=Math.min(minY,p[1]);maxX=Math.max(maxX,p[0]);maxY=Math.max(maxY,p[1]);}
+  const w=maxX-minX,h=maxY-minY,cell=Math.min(w,h);
+  if(cell===0)return [minX,minY];
+  const mk=(x,y,hh)=>{const d=ptPolyDist(x,y,rings);return {x,y,h:hh,d,max:d+hh*Math.SQRT2};};
+  let q=[],hh=cell/2;
+  for(let x=minX;x<maxX;x+=cell)for(let y=minY;y<maxY;y+=cell)q.push(mk(x+hh,y+hh,hh));
+  let best=mk(minX+w/2,minY+h/2,0);
+  while(q.length){
+    q.sort((a,b)=>b.max-a.max);
+    const c=q.shift();
+    if(c.d>best.d)best=c;
+    if(c.max-best.d<=prec)continue;
+    hh=c.h/2;
+    q.push(mk(c.x-hh,c.y-hh,hh),mk(c.x+hh,c.y-hh,hh),mk(c.x-hh,c.y+hh,hh),mk(c.x+hh,c.y+hh,hh));
+  }
+  return [best.x,best.y];
+}
+function labelPoint(f){
+  const polys=f.geometry.coordinates;
+  let big=polys[0],bigA=-1;
+  for(const poly of polys){const o=poly[0];let a=0;for(let i=0,j=o.length-1;i<o.length;j=i++)a+=(o[j][0]+o[i][0])*(o[j][1]-o[i][1]);a=Math.abs(a);if(a>bigA){bigA=a;big=poly;}}
+  const lat0=big[0][0][1],k=Math.cos(lat0*Math.PI/180);
+  const rings=big.map(r=>r.map(c=>[c[0]*k,c[1]]));
+  const [x,y]=polyLabel(rings,1e-7);
+  return [y,x/k];
+}
+function rebuildLabels(fc){
+  labelGroup.clearLayers();
+  fc.features.forEach(f=>{
+    L.tooltip({permanent:true,direction:'center',className:'figlabel',interactive:false}).setLatLng(labelPoint(f)).setContent(String(f.properties.fig)).addTo(labelGroup);
+  });
+}
+
 let bounds = null;
 function fit(){if(bounds&&bounds.isValid())map.fitBounds(bounds.pad(0.05));}
 const t0=Date.now();
@@ -613,6 +870,7 @@ $('#ctltoggle').onclick=()=>{ctlIsClosed()?openCtl():closeCtl();};
 $('#legend').onclick=e=>{if(e.target.closest('.lgh'))(legendOpen?closeLegend():openLegend());};
 $('#opac').oninput=e=>{fillOp=e.target.value/100;restyle();};
 $('#lblchk').onchange=updLabels;
+$('#coordchk').onchange=e=>{coordMode=e.target.checked;toast(coordMode?'Klicka eller tryck på kartan för att se koordinater. Högerklick och långt tryck fungerar alltid.':'Koordinater vid klick avstängt');};
 $('#fitbtn').onclick=fit;
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{closeOverlays(false);showTab(t.dataset.tab);if(isMobile()&&sizeIdx===0)setSize(2);});
 function showTab(k){
@@ -653,7 +911,7 @@ let suggest=null; // {standId, from, items:[{type,sub,year,note}]}
 let moveAid=null;
 function select(id,{zoom=false,tab=true}={}){
   closeOverlays(true);
-  selId=id;formState=null;editMode=false;suggest=null;moveAid=null;
+  selId=id;formState=null;editMode=false;suggest=null;moveAid=null;plotForm=null;
   restyle();renderCard();renderTable();
   if(tab)showTab('card');
   const l=layers.get(id);
@@ -677,7 +935,7 @@ function renderCard(){
   if(selId==null){
     const g=groupSummary();let N=0,H=0,V=0;
     const rows=Object.entries(g).map(([k,v])=>{N+=v.n;H+=v.ha;V+=v.m3;return `<tr><td><i class="chip" style="background:${GRP[k]};padding:0 7px">&nbsp;</i> ${esc(k)}</td><td class="n">${v.n}</td><td class="n">${nf(v.ha,1)}</td><td class="n">${nf(v.m3)}</td></tr>`;}).join('');
-    el.innerHTML=`<h2>Fastighet ${PROP}</h2>
+    el.innerHTML=`${remindersHTML(4)}${upcomingHTML()}<h2 style="margin-top:18px">Fastighet ${PROP}</h2>
       <p class="muted">Klicka på ett bestånd på kartan för att se uppgifter och lägga in åtgärder.</p>
       <table><tr><th>Huvudgrupp</th><th class="n">Delar</th><th class="n">ha</th><th class="n">m³</th></tr>${rows}
       <tr><td><b>Totalt</b></td><td class="n"><b>${N}</b></td><td class="n"><b>${nf(H,1)}</b></td><td class="n"><b>${nf(V)}</b></td></tr></table>
@@ -692,7 +950,7 @@ function renderCard(){
   const chRows=ch?Object.entries(ch).filter(([k])=>EDIT_FIELDS.includes(k)).map(([k,v])=>`${esc(FIELD_LABELS[k])}: ${esc(fmtVal(base[k]))} → ${esc(fmtVal(v))}`):[];
   const changedBox=chRows.length?`<div class="act-item" style="background:#fff8e6"><b>Ändrat av dig sedan laserdata</b><div class="small" style="margin-top:3px">${chRows.join('<br>')}</div></div>`:'';
   const head=`<h2>Figur ${p.fig}<small>Standid ${p.id}</small></h2>
-    <div class="chips"><span class="chip">${esc(p.grp)}</span>${p.utv?`<span class="chip">${esc(p.utv)}</span>`:''}${p.tsl?`<span class="chip">${esc(p.tsl)}</span>`:''}<span class="chip">${nf(p.ha,2)} ha</span>${ch?'<span class="chip" style="background:#ffe3a3">Ändrad</span>':''}</div>`;
+    <div class="chips"><span class="chip">${esc(p.grp)}</span>${p.utv?`<span class="chip">${esc(p.utv)}</span>`:''}${p.tsl?`<span class="chip">${esc(p.tsl)}</span>`:''}<span class="chip">${nf(p.ha,2)} ha</span>${ch?'<span class="chip" style="background:#ffe3a3">Ändrad</span>':''}${p.custom?'<span class="chip" style="background:#e3f2fd">Eget bestånd</span>':''}</div>`;
   if(editMode){
     el.innerHTML=head+`<h3>Redigera uppgifter</h3><p class="small muted">Ändra det som inte stämmer längre sedan laserskanningen. Laserdatan finns kvar och kan återställas.</p>`+editHTML()+`<p style="margin-top:16px"><button class="lnk" data-do="canceledit">← Tillbaka till beståndet</button></p>`;
     return;
@@ -712,15 +970,21 @@ function renderCard(){
       <tr><td>Trädslag</td><td>${esc(p.tsl||'Ej angivet')}</td></tr>
       ${p.age!=null?`<tr><td>Medelålder</td><td>${nf(p.age)} år</td></tr>`:''}
       ${p.note?`<tr><td>Anteckning</td><td>${esc(p.note)}</td></tr>`:''}
-      <tr><td>Fertilitetsklass</td><td>${esc(p.fert)}</td></tr>
+      ${p.g!=null?`<tr><td>Grundyta (uppmätt)</td><td>${nf(p.g,1)} m²/ha</td></tr>`:''}
+      <tr><td>Skogstyp (förordningen)</td><td>${esc((edits[p.id]||{}).skogstyp||'Ej angiven')}</td></tr>
+      ${p.dbh!=null?`<tr><td>Medeldiameter (Dbrh)</td><td>${nf(p.dbh,1)} cm</td></tr>`:''}
+      <tr><td>Fertilitetsklass (LR-data)</td><td>${esc(p.fert)}</td></tr>
       <tr><td>Marktyp</td><td>${esc(p.mark)}</td></tr>
       <tr><td>Dränering</td><td>${esc(p.dran)}</td></tr>
       <tr><td>Tillgänglighet</td><td>${esc(p.till)}</td></tr>
       <tr><td>Restriktioner</td><td>${esc(restr)}</td></tr></table>
+    ${maturityHTML(p.id)}
+    ${plotsSectionHTML(p.id)}
     <h3>Åtgärder</h3>
     ${formState?formHTML():`<button class="btn" data-do="new">+ Lägg till åtgärd</button>`}
     ${suggest&&suggest.standId===p.id&&!formState?sugHTML():''}
     ${list.length?list.map(a=>actItem(a)).join(''):(formState?'':'<p class="muted small">Inga åtgärder inlagda för det här beståndet.</p>')}
+    ${p.custom?'<p><button class="btn danger" data-do="delcustom">Ta bort eget bestånd</button></p>':''}
     <p style="margin-top:16px"><button class="lnk" data-do="clearsel">← Tillbaka till översikt</button></p>`;
 }
 function editHTML(){
@@ -738,6 +1002,9 @@ function editHTML(){
       <label>Timmer, m³/ha<input name="timmer" type="number" min="0" step="0.1" inputmode="decimal" value="${esc(p.timmer)}"></label>
       <label>Massaved, m³/ha<input name="massa" type="number" min="0" step="0.1" inputmode="decimal" value="${esc(p.massa)}"></label>
     </div>
+    <label>Skogstyp (enligt skogsvårdsförordningen)<select name="skogstyp">${opt(['',...SKOGSTYP],p.skogstyp||'')}</select></label>
+    <div class="small muted" style="margin-top:-6px">Skogstyp är inte samma sak som LR:s fertilitetsklass. Välj själv, och fråga Skogsvårdsföreningen om du är osäker. Skogstyp, trädslag, ålder och diameter styr när förnyelsemognad räknas.</div>
+    <label>Medeldiameter Dbrh, cm (grundytevägd, valfritt)<input name="dbh" type="number" min="0" max="100" step="0.1" inputmode="decimal" value="${p.dbh!=null?esc(p.dbh):''}"></label>
     <label>Anteckning<textarea name="note" rows="3">${esc(p.note||'')}</textarea></label>
     <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-do="saveedit" type="button">Spara</button><button class="btn sec" data-do="canceledit" type="button">Avbryt</button>${edits[selId]?'<button class="btn danger" data-do="resetstand" type="button">Återställ till laserdata</button>':''}</div>
   </form>`;
@@ -748,14 +1015,16 @@ function saveEdit(){
   const base=baseOf(selId);
   const num=n=>{const v=f.elements[n].value.trim();return v===''?null:Number(v);};
   const cand={grp:f.elements.grp.value,utv:f.elements.utv.value||null,tsl:f.elements.tsl.value||null,vol:num('vol'),timmer:num('timmer'),massa:num('massa')};
-  const age=num('age');
-  if([cand.vol,cand.timmer,cand.massa,age].some(v=>v!==null&&(!isFinite(v)||v<0))){toast('Kontrollera siffrorna – de måste vara 0 eller större');return;}
+  const age=num('age'),dbh=num('dbh');
+  if([cand.vol,cand.timmer,cand.massa,age,dbh].some(v=>v!==null&&(!isFinite(v)||v<0))){toast('Kontrollera siffrorna – de måste vara 0 eller större');return;}
   const e={};
   for(const k of EDIT_FIELDS){
     if(cand[k]===null&&(k==='vol'||k==='timmer'||k==='massa'))continue;
     if((cand[k]??null)!==(base[k]??null))e[k]=cand[k];
   }
-  if(age!==null)e.age=age;
+  if(age!==null){e.age=age;const prev=edits[selId]||{};e.ageYear=(prev.age===age&&prev.ageYear)?prev.ageYear:new Date().getFullYear();}
+  if(dbh!==null)e.dbh=dbh;
+  const st=f.elements.skogstyp.value;if(st)e.skogstyp=st;
   const note=f.elements.note.value.trim();if(note)e.note=note;
   if(Object.keys(e).length)edits[selId]=e;else delete edits[selId];
   saveActions();editMode=false;afterEdit();leaveForm();toast('Uppgifterna sparades');
@@ -783,32 +1052,230 @@ function applyMove(aid,y,box){
   moveAid=null;saveActions();restyle();renderCard();renderActs();renderTable();renderData();
   toast('Flyttad till '+y);
 }
+
+/* ---------- Regler ur landskapsförordningen (1998:86) om skogsvård ---------- */
+const SKOGSTYP=['Lund (lundartad)','Harsyre-blåbärstyp','Blåbärstyp','Lingontyp','Ljungtyp','Lavtyp'];
+function maturityFor(tsl,st){
+  if(!tsl||!st)return null;
+  const rich=(st==='Lund (lundartad)'||st==='Harsyre-blåbärstyp');
+  if(tsl==='Tall'){
+    if(rich||st==='Blåbärstyp')return {dbh:29,age:80};
+    if(st==='Lingontyp')return {dbh:27,age:90};
+    if(st==='Ljungtyp')return {dbh:25,age:120};
+    if(st==='Lavtyp')return {dbh:23,age:120};
+  }
+  if(tsl==='Gran'){if(rich)return {dbh:28,age:80};if(st==='Blåbärstyp')return {dbh:26,age:90};}
+  if(tsl==='Vårtbjörk'){if(rich)return {dbh:28,age:60};if(st==='Blåbärstyp')return {dbh:26,age:65};}
+  return null;
+}
+function standAgeInfo(id){
+  const e=edits[id]||{},y=new Date().getFullYear();
+  if(e.age!=null){const ref=e.ageYear||y;return {age:e.age+(y-ref),source:'angiven av dig'};}
+  const pl=actsFor(id).filter(a=>a.type==='Plantering'&&a.status==='utford').sort((a,b)=>b.year-a.year)[0];
+  if(pl)return {age:y-pl.year,source:'räknad från plantering '+pl.year};
+  return null;
+}
+function dominantPlanted(a){
+  if(a&&a.mix){const k=Object.entries(a.mix).sort((x,z)=>z[1]-x[1])[0];return k?k[0]:null;}
+  return (a&&MAIN_TREES.includes(a.sub))?a.sub:null;
+}
+function maturityInfo(id){
+  const p=eff(id),e=edits[id]||{},y=new Date().getFullYear();
+  const tsl=p.tsl==='Björk'?'Vårtbjörk':p.tsl;
+  const st=e.skogstyp||null,m=maturityFor(tsl,st),ai=standAgeInfo(id),dbh=e.dbh??null;
+  let status='okänd',earliest=null;
+  if(m){
+    const dimOk=dbh!=null&&dbh>=m.dbh,ageOk=ai&&ai.age>=m.age;
+    if(dimOk||ageOk)status='mogen';
+    else if(ai||dbh!=null){status='ej';if(ai)earliest=y+(m.age-ai.age);}
+  }
+  return {tsl,st,m,ai,dbh,status,earliest};
+}
+function earliestFelling(id,act){
+  const y=new Date().getFullYear(),st=(edits[id]||{}).skogstyp;
+  let tsl=eff(id).tsl;
+  if(act&&act.type==='Plantering'&&dominantPlanted(act))tsl=dominantPlanted(act);
+  if(tsl==='Björk')tsl='Vårtbjörk';
+  if(!st)return {year:null,why:'Ange skogstyp under Redigera uppgifter för att få tidigaste år för slutavverkning.'};
+  const m=maturityFor(tsl,st);
+  if(!m)return {year:null,why:`Förordningen anger ingen gräns för ${tsl||'okänt trädslag'} på ${st.toLowerCase()}, så ingen tidigaste tid kan föreslås.`};
+  let age=null,base=y;
+  if(act&&act.type==='Plantering'){age=0;base=act.year;}
+  else{const ai=standAgeInfo(id);if(ai){age=ai.age;}}
+  if(age==null)return {year:null,why:'Ange beståndets ålder under Redigera uppgifter för att få tidigaste år för slutavverkning.'};
+  return {year:base+Math.max(0,m.age-age),note:`Tidigast vid ${m.age} års ålder eller ${m.dbh} cm medeldiameter (förordning 1998:86, 2 §). Åldern räknas här från planteringsåret.`};
+}
+function maturityHTML(id){
+  const p=eff(id),mi=maturityInfo(id),e=edits[id]||{};
+  if(p.grp==='Impediment')return `<h3>Impediment</h3><p class="small muted">Träd på bergsimpediment med lägre produktion än tvinmark kan vara en särskilt hänsynskrävande biotop (förordning 1998:86, 11 §). Kontrollera hur skyddet beaktas innan åtgärd.</p>`;
+  let body;
+  if(!mi.m){
+    body=`<p class="small muted">${!e.skogstyp?'Ange <b>skogstyp</b> (och gärna ålder och medeldiameter) under Redigera uppgifter, så visar appen när beståndet är förnyelsemoget enligt landskapsförordningen om skogsvård.':`Förordningen anger ingen gräns för ${esc(mi.tsl||'det trädslaget')} på ${esc(e.skogstyp.toLowerCase())}. Ange trädslaget Vårtbjörk om det gäller vårtbjörk.`}</p>`;
+  }else{
+    const chip=mi.status==='mogen'?'<span class="chip utford">Förnyelsemoget</span>':mi.status==='ej'?`<span class="chip" style="background:#fff1c9">Inte förnyelsemoget${mi.earliest?' – tidigast '+mi.earliest:''}</span>`:'<span class="chip">Uppgift om ålder eller diameter saknas</span>';
+    body=`<p class="small">${chip}</p><table class="kv">
+      <tr><td>Gräns (${esc(mi.tsl)}, ${esc(e.skogstyp)})</td><td>${mi.m.dbh} cm medeldiameter <b>eller</b> ${mi.m.age} års ålder</td></tr>
+      <tr><td>Ålder nu</td><td>${mi.ai?mi.ai.age+' år ('+esc(mi.ai.source)+')':'Ej angiven'}</td></tr>
+      <tr><td>Medeldiameter</td><td>${mi.dbh!=null?nf(mi.dbh,1)+' cm':'Ej angiven'}</td></tr></table>
+      <p class="small muted">Undertryckta träd räknas inte. Före gränserna kan avverkning tillåtas vid underproduktion. Kontrollera alltid med landskapsregeringen.</p>`;
+  }
+  return `<h3>Förnyelsemognad (förordning 1998:86, 2 §)</h3>${body}`;
+}
+function actChips(a){
+  const p=eff(a.standId);let h='';
+  if(a.type==='Slutavverkning'){
+    if(p.ha>0.5){const ps=(a.plan&&a.plan.status)||'Ej ansökt';h+=`<span class="chip" style="background:${ps==='Godkänd'?'#dff0e0':'#fff1c9'}">Förnyelseplan: ${esc(ps)}</span>`;}
+    if(a.status==='planerad'){const mi=maturityInfo(a.standId);if(mi.m&&mi.status==='ej'&&mi.earliest!=null&&a.year<mi.earliest)h+=`<span class="chip" style="background:#fde3e1;color:#9c2018">Före förnyelsemognad (tidigast ${mi.earliest})</span>`;}
+  }
+  if(p.grp==='Impediment'&&a.status==='planerad'&&['Slutavverkning','Gallring','Markberedning','Plantering'].includes(a.type))h+='<span class="chip" style="background:#efe7e2">Impediment – kontrollera biotop</span>';
+  return h;
+}
+
+/* ---------- Påminnelser ---------- */
+const fmtDate=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+function computeReminders(nowArg){
+  const now=nowArg||new Date(),y=now.getFullYear(),R=[];
+  const push=r=>{if(!remDone[r.key])R.push(r);};
+  for(const a of actions){
+    const p=eff(a.standId),lbl='Figur '+p.fig,fell=a.type==='Slutavverkning',big=p.ha>0.5;
+    const base={standId:a.standId,aid:a.id};
+    if(a.status==='planerad'){
+      if(a.year<y)push({...base,key:'late:'+a.id+':'+a.year,level:'red',title:`Försenad: ${actLabel(a)} (${a.year})`,detail:`${lbl}. Flytta fram åtgärden eller markera den som utförd.`,sort:a.year});
+      else if(a.year===y)push({...base,key:'now:'+a.id+':'+a.year,level:'amber',title:`Planerad i år: ${actLabel(a)}`,detail:lbl,sort:y+0.5});
+      if(fell&&big){
+        const pl=a.plan||{status:'Ej ansökt'},ay=pl.date?+pl.date.slice(0,4):null;
+        if(pl.status!=='Godkänd'){
+          if(a.year<=y+1)push({...base,key:'plan:'+a.id+':'+pl.status,level:a.year<=y?'red':'amber',title:'Förnyelseplan krävs före avverkning',detail:`${lbl}, ${nf(p.ha,2)} ha (över 0,5 ha). Status: ${pl.status}. Avverkning får inte börja före godkänd plan och mottaget beslut.`,sort:a.year});
+        }else if(!pl.beslut&&a.year<=y+1){
+          push({...base,key:'beslut:'+a.id,level:'amber',title:'Registrera när beslutet har kommit',detail:`${lbl}: planen är godkänd men inget mottaget beslut är registrerat. Avverkningen får inte påbörjas före beslutet är mottaget.`,sort:a.year});
+        }else if(ay!=null&&a.year>ay+2){
+          push({...base,key:'planexp:'+a.id+':'+pl.date,level:'amber',title:'Planens giltighet går ut före planerat år',detail:`${lbl}: godkänd ${pl.date}, gäller tre kalenderår (till och med ${ay+2}, min tolkning). Planerad avverkning ${a.year}.`,sort:a.year});
+        }
+      }
+      if(fell){
+        const mi=maturityInfo(a.standId);
+        if(mi.m&&mi.status==='ej'&&mi.earliest!=null&&a.year<mi.earliest)push({...base,key:'mogen:'+a.id+':'+a.year,level:'amber',title:'Planerad avverkning före förnyelsemognad',detail:`${lbl}: tidigast ${mi.earliest} enligt ålder, eller när ${mi.m.dbh} cm medeldiameter uppnåtts.`,sort:a.year});
+      }
+      if(p.grp==='Impediment'&&['Slutavverkning','Gallring','Markberedning','Plantering'].includes(a.type))push({...base,key:'imp:'+a.id,level:'info',title:'Impediment – kontrollera biotopskydd',detail:`${lbl}: träd på bergsimpediment kan vara särskilt hänsynskrävande biotop.`,sort:a.year});
+    }else{
+      if(fell&&big&&a.year>=y-1&&!(a.plan&&a.plan.status==='Godkänd'))push({...base,key:'noplan:'+a.id,level:'red',title:'Utförd förnyelseavverkning utan registrerad godkänd plan',detail:`${lbl}: lägg in planens status på åtgärden, eller kontrollera med landskapsregeringen.`,sort:a.year});
+      if(fell){
+        const wantsPlant=a.fornyelse?/plantering/i.test(a.fornyelse):a.sub==='Kalyta';
+        const nat=a.fornyelse?(/Naturlig/i.test(a.fornyelse)&&!wantsPlant):(a.sub==='Fröträdsställning'||a.sub==='Skärmställning');
+        const planted=actions.some(b=>b.standId===a.standId&&b.type==='Plantering'&&b.status==='utford'&&b.year>=a.year);
+        if(wantsPlant&&!planted&&y>=a.year+1){const dl=a.year+3;push({...base,key:'plant3:'+a.id,level:y>dl?'red':(y>=dl?'amber':'info'),title:`Plantering ska vara klar senast ${dl}`,detail:`${lbl}: tre år efter förnyelseavverkning ${a.year}. Ingen utförd plantering är registrerad.`,sort:dl});}
+        if(nat&&!planted&&y>=a.year+5){const dl=a.year+7;push({...base,key:'nat7:'+a.id,level:y>dl?'red':'amber',title:`Kontrollera naturlig förnyelse senast ${dl}`,detail:`${lbl}: ett godtagbart plantbestånd ska ha uppstått inom sju år, annars ska beståndet förnyas eller kompletteras.`,sort:dl});}
+      }
+      if(a.type==='Plantering'){
+        const dl=a.year+3;
+        const ps=plotSummary(a.standId).plant;
+        if(ps&&ps.lastYear>=a.year+1){
+          if(!ps.ok)push({...base,key:'plantlow:'+a.id+':'+ps.lastDate,level:'red',title:'Plantbeståndet underskrider kravet – komplettera',detail:`${lbl}: ${nf(ps.avg.tot,0)} plantor/ha, gräns ${ps.req}/ha (${ps.main.toLowerCase()}). Kompletteringsplantering kan behövas.`,sort:a.year+3});
+        }else if(y>=dl-1)push({...base,key:'chk3:'+a.id,level:y>dl?'red':(y>=dl?'amber':'info'),title:'Kontrollera plantbeståndet (tre år efter plantering)',detail:`${lbl}: planterat ${a.year}. Minst 1 600 tall, 1 400 gran eller 1 200 övriga utvecklingsdugliga plantor per ha ska finnas, annars ska du komplettera.`,sort:dl});
+      }
+      if((fell||a.type==='Gallring')&&a.date){
+        const d=new Date(a.date),yr=d.getFullYear();
+        const ty=p.tsl==='Tall'?{lim:new Date(yr,5,1),dead:new Date(yr,6,1),what:'Tallvirke'}:p.tsl==='Gran'?{lim:new Date(yr,6,1),dead:new Date(yr,7,1),what:'Granvirke'}:null;
+        if(ty&&d<ty.lim){
+          const left=Math.ceil((ty.dead-now)/86400000);
+          if(left>=-60)push({...base,key:'timber:'+a.id,level:left<0?'red':(left<=14?'amber':'info'),title:`${ty.what} ska vara bortkört senast ${fmtDate(ty.dead)}`,detail:`${lbl}: avverkat ${a.date}. Gäller virke i gagnvirkesdimensioner. Alternativt täcks, barkas eller behandlas virket.`,sort:yr+left/1000});
+        }
+      }
+    }
+  }
+  const ord={red:0,amber:1,info:2};
+  return R.sort((a,b)=>(ord[a.level]-ord[b.level])||((a.sort||0)-(b.sort||0)));
+}
+
+function upcomingHTML(){
+  const y=new Date().getFullYear();
+  const pl=actions.filter(a=>a.status==='planerad').sort((a,b)=>(a.year-b.year)||(a.standId-b.standId));
+  if(!pl.length)return '';
+  const groups=[['Försenade',a=>a.year<y,'#9c2018'],['I år ('+y+')',a=>a.year===y,'#1f2a22'],['Nästa år ('+(y+1)+')',a=>a.year===y+1,'#1f2a22'],['Senare',a=>a.year>y+1,'#1f2a22']];
+  let shown=0,total=0,h='<h3>Kommande åtgärder</h3>';
+  for(const [name,test,col] of groups){
+    const items=pl.filter(test);if(!items.length)continue;
+    total+=items.length;
+    const byType={};items.forEach(a=>{const k=a.type;(byType[k]??={ids:new Set(),ha:0});if(!byType[k].ids.has(a.standId)){byType[k].ids.add(a.standId);byType[k].ha+=eff(a.standId).ha;}});
+    const sum=Object.entries(byType).map(([k,v])=>`${esc(k)} ${nf(v.ha,1)} ha`).join(' · ');
+    h+=`<div style="margin:8px 0 4px"><b style="color:${col}">${esc(name)}</b> <span class="small muted">${items.length} st</span><div class="small muted">${sum}</div></div>`;
+    for(const a of items){
+      if(shown>=12)continue;shown++;
+      const p=eff(a.standId);
+      h+=`<button class="lnk" style="display:block;text-align:left;text-decoration:none;color:inherit;width:100%;padding:5px 0;border-bottom:1px solid var(--line)" data-do="goto" data-sid="${a.standId}"><b>${esc(actLabel(a))}</b> <span class="muted">${a.year}</span><br><span class="small muted">Figur ${esc(p.fig)} · ${nf(p.ha,2)} ha · ${esc(p.grp)}</span></button>`;
+    }
+  }
+  if(total>shown)h+=`<p class="small"><button class="lnk" data-do="showplanned">Visa alla ${total} planerade åtgärder →</button></p>`;
+  return h;
+}
+function remRowHTML(r){
+  const key=esc(r.key);
+  return `<div class="rem rem-${r.level}"><div class="rt">${esc(r.title)}</div><div class="small muted">${esc(r.detail)}</div>
+    <div class="links"><button class="lnk" data-do="goto" data-sid="${r.standId}">Visa</button><button class="lnk" data-do="remdone" data-key="${key}">Klar</button></div></div>`;
+}
+function remindersHTML(limit){
+  const all=computeReminders(),list=limit?all.slice(0,limit):all;
+  if(!all.length)return '';
+  const urgent=all.filter(r=>r.level!=='info').length;
+  return `<h3 style="margin-top:0">Påminnelser (${all.length}${urgent!==all.length?', varav '+urgent+' akuta':''})</h3>${list.map(remRowHTML).join('')}${limit&&all.length>limit?`<p class="small"><button class="lnk" data-do="showacts">Visa alla ${all.length} påminnelser →</button></p>`:''}`;
+}
+function updateRemBadge(){
+  const n=computeReminders().filter(r=>r.level!=='info').length;
+  const t=document.querySelector('.tab[data-tab=acts]');
+  if(t)t.textContent=n?`Åtgärder (${n})`:'Åtgärder';
+}
+
 function actItem(a,showStand){
   const p=eff(a.standId);
   const when=a.date?a.date:a.year;
   return `<div class="act-item"><div class="top">
       <span class="chip ${a.status}">${a.status==='utford'?'Utförd':'Planerad'}</span>
-      <b>${esc(actLabel(a))}</b><span class="muted">${esc(when)}</span>${a.status==='planerad'&&a.year<new Date().getFullYear()?'<span class="chip" style="background:#fde3e1;color:#9c2018">Försenad</span>':''}${a.vol!=null&&a.vol!==''?`<span class="muted">· ${nf(a.vol,0)} m³</span>`:''}</div>
+      <b>${esc(actLabel(a))}</b><span class="muted">${esc(when)}</span>${a.status==='planerad'&&a.year<new Date().getFullYear()?'<span class="chip" style="background:#fde3e1;color:#9c2018">Försenad</span>':''}${a.vol!=null&&a.vol!==''?`<span class="muted">· ${nf(a.vol,0)} m³</span>`:''}${actChips(a)}</div>
       ${showStand?`<div class="small">${esc(label(p))} · ${nf(p.ha,2)} ha · ${esc(p.grp)}</div>`:''}
       ${a.note?`<div class="small muted" style="margin-top:3px">${esc(a.note)}</div>`:''}
  ${moveAid===a.id?moveBoxHTML(a):''}
       <div class="links">${showStand?`<button class="lnk" data-do="goto" data-sid="${a.standId}">Visa på kartan</button>`:''}
       ${a.status==='planerad'?`<button class="lnk" data-do="move" data-aid="${a.id}">Flytta fram</button>`:''}
+      ${PREP_TYPES.includes(a.type)?`<button class="lnk" data-do="prep" data-aid="${a.id}">Förbered underlag</button>`:''}
       <button class="lnk" data-do="edit" data-aid="${a.id}" data-sid="${a.standId}">Redigera</button>
       <button class="lnk red" data-do="del" data-aid="${a.id}">Ta bort</button></div></div>`;
 }
+function mixFrom(A){
+  if(!A)return {};
+  if(A.mix&&typeof A.mix==='object')return {...A.mix};
+  if(MAIN_TREES.includes(A.sub))return {[A.sub]:100};
+  return {};
+}
 function subHTML(type,a){
-  const sub=(a&&a.type===type)?(a.sub||''):'';
+  const A=(a&&a.type===type)?a:null;
+  let h=subHTMLBase(type,a);
+  if(['Gallring','Avlägsnande av överståndare','Slutavverkning'].includes(type)){
+    const opt=(arr,cur,ph)=>`<option value="">${ph}</option>`+arr.map(v=>`<option ${v===cur?'selected':''}>${esc(v)}</option>`).join('');
+    if(type==='Slutavverkning'){
+      const fo=(A&&A.fornyelse)||'';
+      h+=`<label>Förnyelsesätt<select name="fornyelse" ${A&&A.fornyelse?'data-touched="1"':''}>${opt(['Plantering','Naturlig förnyelse','Naturlig förnyelse + plantering'],fo,'Välj förnyelsesätt')}</select></label>
+      <label>Markberedning<select name="markb">${opt(['Ja','Nej'],(A&&A.markb)||'','Välj')}</select></label>`;
+    }
+    h+=`<label>Avverkare<select name="avverkare">${opt(AVVERKARE,(A&&A.avverkare)||'','Ej vald')}</select></label>`;
+  }
+  return h;
+}
+function subHTMLBase(type,a){
+  const A=(a&&a.type===type)?a:null;
+  const sub=A?(A.sub||''):'';
   const opts=(arr,cur,ph)=>`<option value="">${ph}</option>`+arr.map(v=>`<option ${v===cur?'selected':''}>${esc(v)}</option>`).join('');
   if(type==='Plantering'){
-    const cur=sub.startsWith('Blandat')?'Blandat':sub,m=(a&&a.type===type&&a.mix)||{};
-    return `<label>Trädslag<select name="sub">${opts(['Tall','Gran','Björk','Blandat'],cur,'Välj trädslag')}</select></label>
-      <div id="mixwrap" style="${cur==='Blandat'?'':'display:none'}"><div class="small muted" style="margin-bottom:4px">Ange fördelningen i procent (summa 100)</div>
-        <div class="three">
-          <label>Tall %<input name="mixTall" type="number" min="0" max="100" inputmode="numeric" value="${m.Tall!=null?esc(m.Tall):''}"></label>
-          <label>Gran %<input name="mixGran" type="number" min="0" max="100" inputmode="numeric" value="${m.Gran!=null?esc(m.Gran):''}"></label>
-          <label>Björk %<input name="mixBjork" type="number" min="0" max="100" inputmode="numeric" value="${m['Björk']!=null?esc(m['Björk']):''}"></label>
-        </div></div>`;
+    const m=mixFrom(A),others=Object.keys(m).filter(k=>!MAIN_TREES.includes(k)&&!SPECIAL_TREES.includes(k));
+    const on=others[0]?others[0].replace(/^Annat: /,''):'',ov=others[0]?m[others[0]]:'';
+    const row=n=>`<label>${n} %<input name="mix_${n}" type="number" min="0" max="100" inputmode="numeric" value="${m[n]!=null?esc(m[n]):''}"></label>`;
+    return `<div class="small muted">Ange fördelningen i procent. Summan ska bli 100. Fyll bara i ett trädslag om hela planteringen är ren.</div>
+      <div class="three">${MAIN_TREES.map(row).join('')}</div>
+      <details ${(SPECIAL_TREES.some(n=>m[n])||others.length)?'open':''}><summary style="cursor:pointer;color:var(--g);font-weight:600">Specialträd</summary>
+        <div class="small muted" style="margin:4px 0">Förordningen godtar dessa på lämplig växtplats. Procenten räknas med i summan ovan.</div>
+        <div class="three">${SPECIAL_TREES.map(row).join('')}</div>
+        <div class="two" style="margin-top:8px"><label>Annat trädslag<input name="mix_other_name" value="${esc(on)}" placeholder="t.ex. asp" autocomplete="off"></label><label>% <input name="mix_other" type="number" min="0" max="100" inputmode="numeric" value="${ov!==''?esc(ov):''}"></label></div>
+      </details>
+      <div id="mixsum" class="small muted"></div>`;
   }
   if(type==='Markberedning'){
     const M=['Harv','Högläggare','Grävmaskin'];
@@ -822,7 +1289,12 @@ function subHTML(type,a){
   }
   if(type==='Slutavverkning'){
     return `<label>Avverkningsform<select name="sub">${opts(['Kalyta','Fröträdsställning','Skärmställning'],sub,'Välj form')}</select></label>
-      <div class="small muted">Kalyta: all skog avverkas. Fröträdsställning: ett fåtal fröträd lämnas för naturlig föryngring. Skärmställning: en gles skärm lämnas som skydd och fröspridare.</div>`;
+      <div class="small muted">Kalyta: all skog avverkas. Fröträdsställning: ett fåtal fröträd lämnas för naturlig föryngring. Skärmställning: en gles skärm lämnas som skydd och fröspridare.</div>
+      <div class="small muted">Förnyelseavverkning på mer än 0,5 ha kräver en godkänd förnyelseplan (Skogsportalen) innan avverkningen börjar. Planen gäller tre kalenderår.</div>
+      <label>Förnyelseplan<select name="planstatus">${['Ej ansökt','Ansökt','Godkänd'].map(x=>`<option ${x===((A&&A.plan&&A.plan.status)||'Ej ansökt')?'selected':''}>${x}</option>`).join('')}</select></label>
+      <label>Datum för ansökan eller beslut (valfritt)<input name="plandate" type="date" value="${esc((A&&A.plan&&A.plan.date)||'')}"></label>
+      <label>Beslut mottaget, datum (valfritt)<input name="planbeslut" type="date" value="${esc((A&&A.plan&&A.plan.beslut)||'')}"></label>
+      <label>Ärendenummer (valfritt)<input name="planref" value="${esc((A&&A.plan&&A.plan.ref)||'')}" autocomplete="off"></label>`;
   }
   if(type==='Annat'){
     return `<label>Beskriv åtgärden<input name="other" value="${esc(sub)}" placeholder="t.ex. Dikesrensning" autocomplete="off"></label>`;
@@ -851,19 +1323,30 @@ function formHTML(){
     <div style="display:flex;gap:8px"><button class="btn" data-do="saveform" type="button">Spara</button><button class="btn sec" data-do="cancelform" type="button">Avbryt</button></div>
   </form>`;
 }
+let sugHint='';
 function buildSuggestions(a){
   const k2=a.type+'|'+(a.sub||'');
   const key=FOLLOW[k2]?k2:a.type;
   const rules=FOLLOW[key]||[];
-  return rules.map((r,i)=>({type:r.type,sub:r.sub||'',year:a.year+ruleYrs(key,i,r.yrs),note:r.note||''}))
-    .filter(sg=>!actsFor(a.standId).some(x=>x.status==='planerad'&&x.type===sg.type&&(!sg.sub||x.sub===sg.sub)));
+  const out=[];sugHint='';
+  rules.forEach((r,i)=>{
+    let year,note=r.note||'';
+    if(r.dyn==='mogen'){
+      const m=earliestFelling(a.standId,a);
+      if(m.year==null){sugHint=m.why;return;}
+      year=Math.max(m.year,a.year+1);note=note||m.note;
+    }else year=a.year+ruleYrs(key,i,r.yrs);
+    out.push({type:r.type,sub:r.sub||'',year,note});
+  });
+  return out.filter(sg=>!actsFor(a.standId).some(x=>x.status==='planerad'&&x.type===sg.type&&(!sg.sub||x.sub===sg.sub)));
 }
 function sugHTML(){
   return `<div class="act-item" id="sugbox" style="background:#eef6ff;border-color:#b9d4f0">
     <b>Föreslagna kommande åtgärder</b>
-    <div class="small muted" style="margin:2px 0 6px">Efter ${esc(suggest.from)}. Justera året eller avmarkera.</div>
+    <div class="small muted" style="margin:2px 0 6px">Efter ${esc(suggest.from)}.${suggest.items.length?' Justera året eller avmarkera.':''}</div>
+    ${suggest.hint?`<div class="small" style="margin:4px 0 6px;color:#7a5b00">${esc(suggest.hint)}</div>`:''}
     ${suggest.items.map((sg,i)=>`<div class="sugrow"><label><input type="checkbox" data-sug="${i}" checked> ${esc(sg.type)}${sg.sub?' – '+esc(sg.sub):''}</label><input type="number" data-sugyr="${i}" min="1990" max="2100" value="${sg.year}"></div>${sg.note?`<div class="small muted" style="margin:-2px 0 6px 28px">${esc(sg.note)}</div>`:''}`).join('')}
-    <div style="display:flex;gap:8px;margin-top:8px"><button class="btn" data-do="sugadd" type="button">Lägg till valda</button><button class="btn sec" data-do="sugskip" type="button">Hoppa över</button></div>
+    <div style="display:flex;gap:8px;margin-top:8px">${suggest.items.length?'<button class="btn" data-do="sugadd" type="button">Lägg till valda</button><button class="btn sec" data-do="sugskip" type="button">Hoppa över</button>':'<button class="btn sec" data-do="sugskip" type="button">Stäng</button>'}</div>
   </div>`;
 }
 function addSuggestions(){
@@ -886,13 +1369,15 @@ function saveForm(){
   if(!type){toast('Välj vilken åtgärd det gäller');return;}
   let sub='',mix=null;
   if(type==='Plantering'){
-    sub=v('sub');if(!sub){toast('Välj trädslag');return;}
-    if(sub==='Blandat'){
-      const t=Number(v('mixTall'))||0,g=Number(v('mixGran'))||0,b=Number(v('mixBjork'))||0;
-      if(t+g+b!==100){toast('Fördelningen måste bli 100 % (nu '+(t+g+b)+' %)');return;}
-      mix={Tall:t,Gran:g,'Björk':b};
-      sub='Blandat ('+[t&&`Tall ${t} %`,g&&`Gran ${g} %`,b&&`Björk ${b} %`].filter(Boolean).join(', ')+')';
-    }
+    const mv={};let sum=0;
+    [...MAIN_TREES,...SPECIAL_TREES].forEach(n=>{const x=Number(v('mix_'+n))||0;if(x>0){mv[n]=x;sum+=x;}});
+    const ov=Number(v('mix_other'))||0;
+    if(ov>0){mv['Annat: '+(v('mix_other_name')||'övrigt')]=ov;sum+=ov;}
+    if(!sum){toast('Ange minst ett trädslag');return;}
+    if(sum!==100){toast('Fördelningen måste bli 100 % (nu '+sum+' %)');return;}
+    mix=mv;
+    const ks=Object.keys(mv);
+    sub=ks.length===1?ks[0].replace(/^Annat: /,''):ks.map(k=>`${k.replace(/^Annat: /,'')} ${mv[k]} %`).join(', ');
   }else if(type==='Markberedning'){
     sub=v('sub');if(!sub){toast('Välj metod');return;}
     if(sub==='Annat'){sub=v('other');if(!sub){toast('Ange metod');return;}}
@@ -907,12 +1392,13 @@ function saveForm(){
   if(date)year=parseInt(date.slice(0,4),10);
   if(!(year>=1990&&year<=2100)){toast('Ange ett giltigt år');return;}
   const vol=(VOL_TYPES.includes(type)&&v('vol')!=='')?Number(v('vol')):null;
-  const rec={status,type,sub,mix,year,date:date||null,vol,note:v('note')};
+  const plan=type==='Slutavverkning'?{status:v('planstatus')||'Ej ansökt',date:v('plandate')||null,beslut:v('planbeslut')||null,ref:v('planref')||''}:null;
+  const rec={status,type,sub,mix,plan,year,date:date||null,vol,note:v('note'),avverkare:v('avverkare')||'',fornyelse:type==='Slutavverkning'?(v('fornyelse')||''):'',markb:type==='Slutavverkning'?(v('markb')||''):''};
   let saved;
   if(formState.aid){saved=actions.find(x=>x.id===formState.aid);Object.assign(saved,rec);suggest=null;}
   else{saved={id:uid(),standId:selId,created:new Date().toISOString(),...rec};actions.push(saved);
     const items=buildSuggestions(saved);
-    suggest=items.length?{standId:selId,from:actLabel(saved)+' '+(saved.date||saved.year),items}:null;}
+    suggest=(items.length||sugHint)?{standId:selId,from:actLabel(saved)+' '+(saved.date||saved.year),items,hint:sugHint}:null;}
   saveActions();formState=null;
   restyle();renderCard();renderActs();renderTable();renderData();
   leaveForm();toast('Åtgärden sparades');
@@ -927,12 +1413,13 @@ function renderActs(){
   const list=actions.filter(a=>actFilter==='alla'||(actFilter==='forsenad'?(a.status==='planerad'&&a.year<curY):a.status===actFilter)).sort((a,b)=>(a.year-b.year)||(a.standId-b.standId));
   const sum=st=>{const s=new Set(actions.filter(a=>a.status===st).map(a=>a.standId));let ha=0;s.forEach(i=>ha+=baseOf(i).ha);return {n:actions.filter(a=>a.status===st).length,ha};};
   const pl=sum('planerad'),ut=sum('utford');
-  el.innerHTML=`<div class="filters"><select id="actfilter">
+  el.innerHTML=`${remindersHTML()}<div class="filters"><select id="actfilter">
       <option value="alla">Alla åtgärder</option><option value="planerad">Planerade</option><option value="forsenad">Försenade</option><option value="utford">Utförda</option></select></div>
     <p class="small muted">Planerade: ${pl.n} st (berör ${nf(pl.ha,1)} ha) · Utförda: ${ut.n} st (berör ${nf(ut.ha,1)} ha). Försenade: ${actions.filter(a=>a.status==='planerad'&&a.year<curY).length} st. Arealen är hela beståndens areal.</p>
     ${list.length?list.map(a=>actItem(a,true)).join(''):'<p class="muted">Inga åtgärder inlagda ännu. Klicka på ett bestånd och välj “Lägg till åtgärd”.</p>'}`;
   $('#actfilter').value=actFilter;
   $('#actfilter').onchange=e=>{actFilter=e.target.value;renderActs();};
+  updateRemBadge();
 }
 
 /* ---------- table tab ---------- */
@@ -943,13 +1430,14 @@ function rowsData(){
 }
 function renderTable(){
   const el=$('#pane-table');
+  if(tView==='forn'){renderFornView(el);return;}
   let r=rowsData();
   if(tGrp)r=r.filter(x=>x.grp===tGrp);
   if(tText){const q=tText.toLowerCase();r=r.filter(x=>`${x.fig} ${x.id} ${x.grp} ${x.utv} ${x.tsl}`.toLowerCase().includes(q));}
   r.sort((a,b)=>{const x=a[tSort.k],y=b[tSort.k];return (typeof x==='number'?x-y:String(x).localeCompare(String(y),'sv'))*tSort.d||(a.id-b.id);});
   const H=r.reduce((s,x)=>s+x.ha,0),V=r.reduce((s,x)=>s+x.tot,0);
   const focus=document.activeElement&&document.activeElement.id;
-  el.innerHTML=`<div class="filters"><input id="tfilter" placeholder="Sök figur, standid, trädslag…" value="${esc(tText)}">
+  el.innerHTML=`${tviewHTML()}<div class="filters"><input id="tfilter" placeholder="Sök figur, standid, trädslag…" value="${esc(tText)}">
     <select id="tgrp"><option value="">Alla grupper</option>${Object.keys(GRP).map(g=>`<option ${tGrp===g?'selected':''}>${g}</option>`).join('')}</select></div>
     <div style="overflow-x:auto"><table><thead><tr>${COLS.map(([k,n,c])=>`<th class="sort ${c}" data-sort="${k}">${n}${tSort.k===k?(tSort.d>0?' ▲':' ▼'):''}</th>`).join('')}</tr></thead>
     <tbody>${r.map(x=>`<tr class="click ${x.id===selId?'row-sel':''}" data-do="goto" data-sid="${x.id}"><td class="n">${x.fig}${x.ed?' ✎':''}</td><td class="n">${x.id}</td><td class="n">${nf(x.ha,2)}</td><td>${esc(x.grp)}</td><td>${esc(x.utv)}</td><td>${esc(x.tsl)}</td><td class="n">${nf(x.vol)}</td><td class="n">${nf(x.tot)}</td><td class="n">${x.na||''}</td></tr>`).join('')}</tbody>
@@ -967,7 +1455,7 @@ function exportCSV(){
     return [PROP,p.id,p.fig,p.ha.toFixed(2).replace('.',','),p.grp,a.status==='utford'?'Utförd':'Planerad',a.type,a.sub||'',a.year,a.date||'',a.vol??'',a.note||''];});
   download(`atgarder_${PROP}.csv`,'\ufeff'+[head,...rows].map(r=>r.map(csvCell).join(';')).join('\r\n'),'text/csv;charset=utf-8');
 }
-function exportBackup(){download(`skogsplan_backup_${PROP}_${new Date().toISOString().slice(0,10)}.json`,JSON.stringify({version:3,property:PROP,saved:new Date().toISOString(),actions,edits,follow:followYrs},null,1),'application/json');}
+function exportBackup(){download(`skogsplan_backup_${PROP}_${new Date().toISOString().slice(0,10)}.json`,JSON.stringify({version:5,property:PROP,saved:new Date().toISOString(),actions,edits,follow:followYrs,rem:remDone,plots,custom:customStands,contact},null,1),'application/json');}
 function exportGeo(){
   const fc={type:'FeatureCollection',name:'bestand_'+PROP,features:STANDS.features.map(f=>{
     const p=eff(f.properties.id),base=f.properties,a=actsFor(p.id),pl=a.filter(x=>x.status==='planerad'),ut=a.filter(x=>x.status==='utford');
@@ -977,6 +1465,7 @@ function exportGeo(){
 }
 function followRowsHTML(){
   return Object.entries(FOLLOW).flatMap(([key,rules])=>rules.map((r,i)=>{
+    if(r.dyn)return `<div class="sugrow"><span class="small">Efter ${esc(key.split('|').join(' – '))} → ${esc(r.type+(r.sub?' – '+r.sub:''))}</span><span class="small muted">enligt förordningens tabell</span></div>`;
     const val=ruleYrs(key,i,r.yrs);
     return `<div class="sugrow"><span class="small">Efter ${esc(key.split('|').join(' – '))} → ${esc(r.type+(r.sub?' – '+r.sub:''))}</span><span style="white-space:nowrap"><input type="number" min="0" max="100" step="1" inputmode="numeric" data-rule="${esc(key)}#${i}" value="${val}"> år</span></div>`;
   })).join('');
@@ -1002,6 +1491,7 @@ function renderData(){
     <p class="small muted">Åtgärderna sparas automatiskt i den här webbläsaren på den här enheten. Töms webbläsarens data försvinner de, så ta backup regelbundet.</p>
     <p><button class="btn" data-do="backup">Spara backup (.json)</button></p>
     <p><button class="btn sec" data-do="restore">Läs in backup…</button><input type="file" id="restorefile" accept=".json,application/json" hidden></p>
+    <p><button class="btn sec" data-do="exportplots">Exportera provytor (.csv för Excel)</button></p>
     <p><button class="btn sec" data-do="csv">Exportera åtgärder (.csv för Excel)</button></p>
     <p><button class="btn sec" data-do="geo">Exportera bestånd + åtgärder (.geojson för QGIS)</button></p>
     <h3>Så läser du siffrorna</h3>
@@ -1013,6 +1503,8 @@ function renderData(){
     <h3>Ändrade beståndsuppgifter</h3>
     <p class="small muted">${Object.keys(edits).length} bestånd har uppgifter som du ändrat sedan laserdata. De används i färgläggning, tabell, summor och exporter, och ingår i backupen.</p>
     ${Object.keys(edits).length?'<p><button class="btn danger" data-do="wipeedits">Återställ alla till laserdata</button></p>':''}
+    <h3>Om appen</h3>
+    <p class="small muted">Version: ${APP_VERSION}. Ser du ett äldre versionsnummer efter en uppdatering: stäng appen helt och öppna den igen, eller ladda om sidan hårt.</p>
     <h3>Rensa</h3>
     <p><button class="btn danger" data-do="wipe">Ta bort alla åtgärder (${actions.length} st)</button></p>`;
   bindStandsImport();
@@ -1036,8 +1528,8 @@ function renderData(){
       const ok=o.actions.filter(a=>Number.isFinite(a.standId)&&a.type&&(a.status==='planerad'||a.status==='utford'));
       const ne=sanitizeEdits(o.edits);
       if((actions.length||Object.keys(edits).length)&&!confirm(`Ersätta dina ${actions.length} åtgärder och ${Object.keys(edits).length} ändrade bestånd med innehållet i backupen (${ok.length} åtgärder, ${Object.keys(ne).length} ändrade bestånd)?`))return;
-      actions=ok.map(a=>({id:a.id||uid(),standId:a.standId,status:a.status,type:String(a.type),sub:a.sub||'',mix:a.mix||null,year:Number(a.year),date:a.date||null,vol:a.vol??null,note:a.note||'',created:a.created||new Date().toISOString()}));
-      edits=ne;if(o.follow)followYrs=sanitizeFollow(o.follow);saveActions();afterEdit();toast(`${actions.length} åtgärder och ${Object.keys(edits).length} ändrade bestånd inlästa`);
+      actions=ok.map(a=>({id:a.id||uid(),standId:a.standId,status:a.status,type:String(a.type),sub:a.sub||'',mix:a.mix||null,plan:a.plan||null,avverkare:a.avverkare||'',fornyelse:a.fornyelse||'',markb:a.markb||'',year:Number(a.year),date:a.date||null,vol:a.vol??null,note:a.note||'',created:a.created||new Date().toISOString()}));
+      edits=ne;if(o.follow)followYrs=sanitizeFollow(o.follow);if(o.rem)remDone=sanitizeRem(o.rem);if(o.plots)plots=sanitizePlots(o.plots);if(o.contact)contact=sanitizeContact(o.contact);if(o.custom){customStands=sanitizeCustom(o.custom);applyStands();}saveActions();afterEdit();toast(`${actions.length} åtgärder och ${Object.keys(edits).length} ändrade bestånd inlästa`);
     }catch(err){toast('Kunde inte läsa filen: '+err.message);}};
     r.readAsText(file);
   };
@@ -1059,6 +1551,32 @@ document.addEventListener('click',e=>{
   else if(d==='movesave'){const bx=b.closest('[data-movebox]');applyMove(aid,parseInt(bx.querySelector('.moveyr').value,10),bx);}
   else if(d==='sugadd')addSuggestions();
   else if(d==='sugskip'){suggest=null;renderCard();}
+  else if(d==='prep')prepOpen(aid);
+  else if(d==='prepclose'){prepCollect();$('#prepdlg').hidden=true;if(Object.keys(contact).length)saveActions();}
+  else if(d==='prepsave')prepSaveDraft();
+  else if(d==='prepdel'){prepCollect();prep.figs=prep.figs.filter(i=>i!==+b.dataset.sid);if(!prep.figs.length)prep.figs=[actions.find(x=>x.id===prep.aid).standId];renderPrep();}
+  else if(d==='prepadd'){prepCollect();const n=($('#pd_addfig').value||'').split(/[ ,;]+/).map(x=>x.trim()).filter(Boolean);let added=0;n.forEach(x=>STANDS.features.forEach(f=>{if(String(f.properties.fig)===x&&!prep.figs.includes(f.properties.id)){prep.figs.push(f.properties.id);added++;}}));renderPrep();toast(added?`${added} delar tillagda`:'Hittade ingen figur med det numret');}
+  else if(d==='prepcopy'){copyText(prepText());}
+  else if(d==='prepdl'){download(`underlag_atgardsansokan_${PROP}.txt`,'\ufeff'+prepText(),'text/plain;charset=utf-8');}
+  else if(d==='prepgeo'){prepCollect();prepGeo();}
+  else if(d==='tview'){tView=b.dataset.v;renderTable();if(tView==='forn'&&!prefs.forn&&!LRV.data.forn){/* visa knapp */}}
+  else if(d==='loadforn'){setLR('forn',true);renderTable();}
+  else if(d==='fornto')fornTo(+b.dataset.i);
+  else if(d==='newplot'){plotForm={kind:b.dataset.kind,pid:null,standId:selId};renderCard();}
+  else if(d==='editplot'){const p=plots.find(x=>x.id===b.dataset.pid);if(p){plotForm={kind:p.kind,pid:p.id,standId:p.standId};renderCard();}}
+  else if(d==='delplot'){if(confirm('Ta bort provytan?')){plots=plots.filter(x=>x.id!==b.dataset.pid);saveActions();renderCard();renderActs();}}
+  else if(d==='saveplot')savePlot();
+  else if(d==='cancelplot'){plotForm=null;renderCard();}
+  else if(d==='plotgps'){const f=$('#plotform');if(!f)return;if(!gpsLast){toast('Slå på GPS-knappen på kartan först');return;}f.elements.pl_lat.value=gpsLast[0].toFixed(6);f.elements.pl_lon.value=gpsLast[1].toFixed(6);toast('Position inlagd');}
+  else if(d==='useg'){const S=plotSummary(selId);if(S.rel){edits[selId]=Object.assign({},edits[selId]||{},{g:Math.round(S.rel.tot*10)/10});saveActions();afterEdit();toast('Grundytan sparades på beståndet');}}
+  else if(d==='exportplots')exportPlots();
+  else if(d==='savecustom')saveCustomStand();
+  else if(d==='closestanddlg'){$('#standdlg').hidden=true;}
+  else if(d==='delcustom'){const c=customStands.find(x=>x.id===selId);if(c&&confirm('Ta bort det egna beståndet? Åtgärder och provytor på det ligger kvar men syns som okänt bestånd.')){customStands=customStands.filter(x=>x.id!==selId);selId=null;saveActions();applyStands();toast('Beståndet togs bort');}}
+  else if(d==='copytxt')copyText(b.dataset.txt);
+  else if(d==='remdone'){remDone[b.dataset.key]=new Date().toISOString().slice(0,10);saveActions();renderActs();renderCard();}
+  else if(d==='showacts'){showTab('acts');}
+  else if(d==='showplanned'){actFilter='planerad';renderActs();showTab('acts');}
   else if(d==='testkey')testKey();
   else if(d==='resetfollow'){followYrs={};saveActions();renderData();toast('Standardintervallen är återställda');}
   else if(d==='editstand'){editMode=true;formState=null;renderCard();focusForm();}
@@ -1081,7 +1599,16 @@ document.addEventListener('click',e=>{
   else if(d==='clearbound'){showUserBoundary(null);try{localStorage.removeItem('skogsplan:userboundary');}catch(e){}renderData();}
   else if(d==='wipe'){if(actions.length&&confirm(`Ta bort alla ${actions.length} åtgärder? Det går inte att ångra (ta backup först).`)){actions=[];saveActions();restyle();renderCard();renderActs();renderTable();renderData();}}
 });
+document.addEventListener('input',e=>{
+  if(e.target.name==='pl_radius'&&e.target.form&&e.target.form.id==='plotform'){const sel=e.target.form.elements.pl_preset;if(sel){const m=[...sel.options].find(o=>o.value!=='annan'&&Math.abs(Number(o.value)-Number(e.target.value))<0.005);sel.value=m?m.value:'annan';}}
+  if(e.target.form&&e.target.form.id==='plotform'&&plotForm)plotCalc(e.target.form);
+  const f=e.target.form;
+  if(!f||f.id!=='actform'||!/^mix_/.test(e.target.name||''))return;
+  let sum=0;[...f.elements].forEach(x=>{if(/^mix_(?!other_name)/.test(x.name))sum+=Number(x.value)||0;});
+  const el=$('#mixsum');if(el){el.textContent='Summa: '+sum+' %'+(sum===100?' ✓':' (ska bli 100)');el.style.color=sum===100?'#1d5e22':'#7a5b00';}
+});
 document.addEventListener('change',e=>{
+  if(e.target.name==='pl_preset'&&e.target.form&&e.target.form.id==='plotform'){const f=e.target.form;if(e.target.value!=='annan')f.elements.pl_radius.value=e.target.value;plotCalc(f);return;}
   if(e.target.dataset&&e.target.dataset.rule){
     const v=e.target.value.trim(),k=e.target.dataset.rule;
     if(v===''||!isFinite(Number(v))||Number(v)<0||Number(v)>100){delete followYrs[k];}else followYrs[k]=Math.round(Number(v));
@@ -1096,24 +1623,32 @@ document.addEventListener('change',e=>{
     $('#volwrap').style.display=VOL_TYPES.includes(e.target.value)?'':'none';
   }
   if(n==='sub'){
-    const t=f.elements.type.value,val=e.target.value,mw=$('#mixwrap'),ow=$('#otherwrap');
-    if(mw)mw.style.display=(t==='Plantering'&&val==='Blandat')?'':'none';
+    const t=f.elements.type.value,val=e.target.value,ow=$('#otherwrap');
     if(ow)ow.style.display=(t==='Markberedning'&&val==='Annat')?'':'none';
+    const fs=f.elements.fornyelse;
+    if(t==='Slutavverkning'&&fs&&!fs.dataset.touched)fs.value=(val==='Kalyta')?'Plantering':(val?'Naturlig förnyelse':'');
   }
+  if(n==='fornyelse')e.target.dataset.touched='1';
 });
 
 
 
 /* ---------- Beståndsdata: ligger i den delade planen (bakom inloggning), inte i den publika filen ---------- */
 const STANDS_CACHE='skogsplan:stands-cache';
+let BASE_STANDS={type:'FeatureCollection',features:[]};
+function customFeatures(){
+  return customStands.map(c=>({type:'Feature',geometry:{type:'MultiPolygon',coordinates:[[c.ring.concat([c.ring[0]])]]},properties:{...c.props,id:c.id,custom:true}}));
+}
 function applyStands(fc){
-  STANDS=fc;
-  byId=new Map(fc.features.map(f=>[f.properties.id,f]));
-  layers.clear();gj.clearLayers();gj.addData(fc);
-  bounds=gj.getBounds();
+  if(fc)BASE_STANDS=fc;
+  const all={type:'FeatureCollection',features:BASE_STANDS.features.concat(customFeatures())};
+  STANDS=all;
+  byId=new Map(all.features.map(f=>[f.properties.id,f]));
+  layers.clear();gj.clearLayers();gj.addData(all);rebuildLabels(all);
+  bounds=all.features.length?gj.getBounds():null;
   if(selId!=null&&!byId.has(selId))selId=null;
   restyle();renderCard();renderActs();renderTable();renderData();updateHeader();
-  fit();
+  if(fc||!bounds)fit();
 }
 function convertStands(g){
   const feats=(g&&g.type==='FeatureCollection')?g.features:null;
@@ -1195,12 +1730,284 @@ function bindStandsImport(){
   };
 }
 
+
+/* ---------- Provytor: relaskop (grundyta) och plantprovytor ---------- */
+let plotForm=null;
+const PSP=['Tall','Gran','Björk','Övrigt'];
+const todayStr=()=>new Date().toISOString().slice(0,10);
+const plotsFor=id=>plots.filter(p=>p.standId===id).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+function relG(p){const c=p.counts||{},g={};let tot=0;PSP.forEach(k=>{const x=(Number(c[k])||0)*(Number(p.baf)||0);g[k]=x;tot+=x;});return {g,tot};}
+function plantHa(p){const area=Math.PI*(Number(p.radius)||0)**2,c=p.counts||{},per={};let tot=0;PSP.forEach(k=>{const x=area?(Number(c[k])||0)*10000/area:0;per[k]=x;tot+=x;});return {per,tot,area};}
+function plotSummary(id){
+  const L=plotsFor(id),rel=L.filter(p=>p.kind==='relaskop'),pl=L.filter(p=>p.kind==='plant');
+  const out={rel:null,plant:null};
+  if(rel.length){const g={};PSP.forEach(k=>g[k]=0);let t=0;rel.forEach(p=>{const r=relG(p);t+=r.tot;PSP.forEach(k=>g[k]+=r.g[k]);});out.rel={n:rel.length,tot:t/rel.length,g:Object.fromEntries(PSP.map(k=>[k,g[k]/rel.length]))};}
+  if(pl.length){
+    const per={};PSP.forEach(k=>per[k]=0);let t=0;pl.forEach(p=>{const r=plantHa(p);t+=r.tot;PSP.forEach(k=>per[k]+=r.per[k]);});
+    const avg={tot:t/pl.length,per:Object.fromEntries(PSP.map(k=>[k,per[k]/pl.length]))};
+    const main=PSP.slice().sort((a,b)=>avg.per[b]-avg.per[a])[0],req=main==='Tall'?1600:main==='Gran'?1400:1200;
+    const lastDate=pl.map(p=>p.date||'').sort().pop()||'';
+    out.plant={n:pl.length,avg,main,req,ok:avg.tot>=req,near:avg.tot<req&&avg.tot>=req-200,lastYear:+lastDate.slice(0,4)||0,lastDate};
+  }
+  return out;
+}
+function plotItemHTML(p){
+  let line;
+  if(p.kind==='relaskop'){const r=relG(p);line=`Relaskop (faktor ${p.baf}): <b>${nf(r.tot,1)} m²/ha</b> · Tall ${nf(r.g.Tall,1)}, Gran ${nf(r.g.Gran,1)}, Björk ${nf(r.g['Björk'],1)}, Övrigt ${nf(r.g['Övrigt'],1)}`;}
+  else{const r=plantHa(p);line=`Plantprovyta (r ${nf(p.radius,2)} m): <b>${nf(r.tot,0)} plantor/ha</b> · Tall ${nf(r.per.Tall,0)}, Gran ${nf(r.per.Gran,0)}, Björk ${nf(r.per['Björk'],0)}, Övrigt ${nf(r.per['Övrigt'],0)}${p.height!=null?` · höjd ${nf(p.height,0)} cm`:''}${p.sly?` · sly: ${esc(p.sly)}`:''}`;}
+  return `<div class="act-item"><div class="small muted">${esc(p.date||'')}${p.lat!=null?' · '+Number(p.lat).toFixed(5)+', '+Number(p.lon).toFixed(5):''}</div><div class="small">${line}</div>${p.note?`<div class="small muted">${esc(p.note)}</div>`:''}
+    <div class="links"><button class="lnk" data-do="editplot" data-pid="${esc(p.id)}">Redigera</button><button class="lnk red" data-do="delplot" data-pid="${esc(p.id)}">Ta bort</button></div></div>`;
+}
+function plotFormHTML(){
+  const pf=plotForm,p=pf.pid?plots.find(x=>x.id===pf.pid):null,kind=pf.kind,c=(p&&p.counts)||{};
+  const num=(n,label,val)=>`<label>${label}<input name="pl_${n}" type="number" min="0" step="1" inputmode="numeric" value="${val!=null&&val!==''?esc(val):''}"></label>`;
+  let body;
+  if(kind==='relaskop'){
+    body=`<label>Relaskopfaktor<select name="pl_baf">${[1,2,3,4].map(b=>`<option ${Number(p?p.baf:2)===b?'selected':''}>${b}</option>`).join('')}</select></label>
+      <div class="small muted">Fyll i antal stammar som räknas in per trädslag. Grundytan blir antal gånger faktor (m²/ha).</div>
+      <div class="two">${PSP.map(k=>num('c_'+k,'Antal '+k.toLowerCase(),c[k])).join('')}</div>`;
+  }else{
+    const PRESETS=[['1.7841','Radie 1,78 m (10 m²)'],['2.8209','Radie 2,82 m (25 m²)'],['3.9894','Radie 3,99 m (50 m²)'],['5.6419','Radie 5,64 m (100 m²)']],rad=p?p.radius:2.8209,hit=PRESETS.find(x=>Math.abs(Number(x[0])-Number(rad))<0.005);
+    body=`<label>Provytans storlek<select name="pl_preset">${PRESETS.map(x=>`<option value="${x[0]}" ${hit&&hit[0]===x[0]?'selected':''}>${x[1]}</option>`).join('')}<option value="annan" ${hit?'':'selected'}>Annan radie</option></select></label>
+      <label>Radie, m<input name="pl_radius" type="number" min="0.5" step="0.0001" inputmode="decimal" value="${esc(rad)}"></label>
+      <div class="small muted">Räkna utvecklingsdugliga, friska plantor. Av två plantor närmare än 0,5 m räknas bara en.</div>
+      <div class="two">${PSP.map(k=>num('c_'+k,'Plantor '+k.toLowerCase(),c[k])).join('')}</div>
+      <div class="two">${num('dam','Skadade eller sjuka (räknas inte)',p&&p.damaged)}${num('hojd','Medelhöjd, cm',p&&p.height)}</div>
+      <label>Sly och lövvegetation<select name="pl_sly"><option value="">Ej bedömt</option>${['Ingen','Måttlig','Mycket'].map(x=>`<option ${p&&p.sly===x?'selected':''}>${x}</option>`).join('')}</select></label>`;
+  }
+  return `<form class="act" id="plotform" onsubmit="return false"><b>${kind==='relaskop'?'Relaskopmätning':'Plantprovyta'}</b>
+    <label>Datum<input name="pl_date" type="date" value="${esc(p?p.date:todayStr())}"></label>
+    ${body}
+    <div id="plcalc" class="small" style="color:#1d5e22"></div>
+    <div class="two"><label>Latitud<input name="pl_lat" readonly value="${p&&p.lat!=null?esc(p.lat):''}"></label><label>Longitud<input name="pl_lon" readonly value="${p&&p.lon!=null?esc(p.lon):''}"></label></div>
+    <button class="btn sec" type="button" data-do="plotgps">Hämta position från GPS</button>
+    <label>Anteckning<textarea name="pl_note" rows="2">${esc(p?p.note:'')}</textarea></label>
+    <div style="display:flex;gap:8px"><button class="btn" data-do="saveplot" type="button">Spara</button><button class="btn sec" data-do="cancelplot" type="button">Avbryt</button></div></form>`;
+}
+function plotCalc(f){
+  const el=$('#plcalc');if(!el)return;
+  const g=n=>f.elements['pl_'+n]?f.elements['pl_'+n].value:'';
+  const counts={};PSP.forEach(k=>counts[k]=Number(g('c_'+k))||0);
+  if(plotForm.kind==='relaskop'){const r=relG({baf:Number(g('baf'))||0,counts});el.textContent=`Grundyta: ${nf(r.tot,1)} m²/ha`;}
+  else{const r=plantHa({radius:Number(g('radius'))||0,counts});el.textContent=`Yta ${nf(r.area,1)} m² · ${nf(r.tot,0)} plantor/ha`;}
+}
+function plotsSectionHTML(id){
+  const L=plotsFor(id),S=plotSummary(id);
+  let h='<h3>Provytor</h3>';
+  if(plotForm&&plotForm.standId===id)h+=plotFormHTML();
+  else h+=`<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sec" data-do="newplot" data-kind="relaskop">+ Relaskop</button><button class="btn sec" data-do="newplot" data-kind="plant">+ Plantprovyta</button></div>`;
+  if(S.rel)h+=`<p class="small"><b>Grundyta (relaskop):</b> medel ${nf(S.rel.tot,1)} m²/ha av ${S.rel.n} ytor (Tall ${nf(S.rel.g.Tall,1)}, Gran ${nf(S.rel.g.Gran,1)}, Björk ${nf(S.rel.g['Björk'],1)}, Övrigt ${nf(S.rel.g['Övrigt'],1)}). <button class="lnk" data-do="useg">Använd som beståndets grundyta</button></p>`;
+  if(S.plant){const P=S.plant;h+=`<p class="small"><b>Plantbestånd:</b> medel ${nf(P.avg.tot,0)} plantor/ha av ${P.n} ytor. Gräns för ${esc(P.main.toLowerCase())}: ${P.req}/ha. <span class="chip ${P.ok?'utford':''}" style="${P.ok?'':'background:#fff1c9'}">${P.ok?'Godtagbart':P.near?'Nära gränsen (inom 200/ha kan godtas vid avvikande förhållanden)':'Under kravet'}</span></p>`;}
+  return h+L.map(plotItemHTML).join('');
+}
+function savePlot(){
+  const f=$('#plotform');if(!f||!plotForm)return;
+  const v=n=>f.elements['pl_'+n]?f.elements['pl_'+n].value.trim():'';
+  const counts={};PSP.forEach(k=>{const x=v('c_'+k);counts[k]=x===''?0:Number(x);});
+  if(Object.values(counts).some(x=>!isFinite(x)||x<0)){toast('Kontrollera antalen');return;}
+  const rec={kind:plotForm.kind,date:v('date')||todayStr(),counts,note:v('note')};
+  if(v('lat')){rec.lat=Number(v('lat'));rec.lon=Number(v('lon'));}
+  if(rec.kind==='relaskop'){rec.baf=Number(v('baf'))||2;if(!Object.values(counts).some(x=>x>0)){toast('Fyll i antal stammar');return;}}
+  else{rec.radius=Number(v('radius'));if(!(rec.radius>0)){toast('Ange provytans radie');return;}rec.damaged=v('dam')===''?null:Number(v('dam'));rec.height=v('hojd')===''?null:Number(v('hojd'));rec.sly=v('sly');}
+  if(plotForm.pid)Object.assign(plots.find(x=>x.id===plotForm.pid),rec);
+  else plots.push({id:uid(),standId:plotForm.standId,created:new Date().toISOString(),...rec});
+  plotForm=null;saveActions();renderCard();renderActs();toast('Provytan sparades');
+}
+function exportPlots(){
+  const head=['Datum','Standid','Figur','Typ','Relaskopfaktor','Radie m','Antal tall','Antal gran','Antal björk','Antal övrigt','Grundyta m2/ha','Plantor per ha','Medelhöjd cm','Skadade','Sly','Latitud','Longitud','Anteckning'];
+  const rows=plots.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(p=>{const q=eff(p.standId),c=p.counts||{};const r=p.kind==='relaskop'?relG(p):null,h=p.kind==='plant'?plantHa(p):null;
+    return [p.date,p.standId,q.fig,p.kind==='relaskop'?'Relaskop':'Plantprovyta',p.baf??'',p.radius!=null?String(p.radius).replace('.',','):'',c.Tall??0,c.Gran??0,c['Björk']??0,c['Övrigt']??0,r?String(Math.round(r.tot*10)/10).replace('.',','):'',h?Math.round(h.tot):'',p.height??'',p.damaged??'',p.sly||'',p.lat??'',p.lon??'',p.note||''];});
+  download(`provytor_${PROP}.csv`,'\ufeff'+[head,...rows].map(r=>r.map(csvCell).join(';')).join('\r\n'),'text/csv;charset=utf-8');
+}
+
+/* ---------- Rita eget bestånd ---------- */
+let drawPts=[],drawRedo=[],drawPoly=null;
+const drawDots=L.layerGroup().addTo(map);
+function ringAreaHa(ring){
+  const lat0=ring.reduce((a,p)=>a+p[1],0)/ring.length,lon0=ring[0][0],kx=111320*Math.cos(lat0*Math.PI/180),ky=110574;
+  let a=0;
+  for(let i=0,j=ring.length-1;i<ring.length;j=i++){
+    const x1=(ring[j][0]-lon0)*kx,y1=(ring[j][1]-lat0)*ky,x2=(ring[i][0]-lon0)*kx,y2=(ring[i][1]-lat0)*ky;
+    a+=x1*y2-x2*y1;
+  }
+  return Math.abs(a)/2/10000;
+}
+function updateDraw(){
+  if(drawPoly){map.removeLayer(drawPoly);drawPoly=null;}
+  drawDots.clearLayers();
+  drawPts.forEach(p=>L.circleMarker([p[1],p[0]],{pane:'gps',radius:5,color:'#fff',weight:2,fillColor:'#e91e63',fillOpacity:1,interactive:false}).addTo(drawDots));
+  if(drawPts.length>=2)drawPoly=(drawPts.length>=3?L.polygon:L.polyline)(drawPts.map(p=>[p[1],p[0]]),{pane:'gps',color:'#e91e63',weight:2,dashArray:'5 4',fillOpacity:.2,interactive:false}).addTo(map);
+  const hint=isMobile()?'':' · Ctrl+Z ångrar, Esc avbryter';
+  $('#drawinfo').textContent=(drawPts.length?`${drawPts.length} punkter${drawPts.length>=3?' · ca '+nf(ringAreaHa(drawPts),2)+' ha':''}`:'Klicka eller tryck på kartan för att sätta hörn')+hint;
+}
+function startDraw(){
+  drawMode=true;drawPts=[];drawRedo=[];$('#map').classList.add('drawing');closeOverlays(false);
+  if(isMobile())setSize(0);
+  $('#drawbar').hidden=false;$('#drawbtn').textContent='Avbryt ritning';updateDraw();
+  toast('Tryck på kartan för att sätta hörnen. Tryck Klar när du är färdig.');
+}
+function endDraw(){
+  drawMode=false;drawPts=[];drawRedo=[];$('#map').classList.remove('drawing');updateDraw();$('#drawbar').hidden=true;$('#drawbtn').textContent='Rita eget bestånd';
+}
+function openStandDlg(){
+  const maxFig=Math.max(0,...STANDS.features.map(f=>+f.properties.fig||0));
+  $('#standdlgbox').innerHTML=`<b style="font-size:17px">Nytt eget bestånd</b>
+    <div class="small muted">Yta cirka ${nf(ringAreaHa(drawPts),2)} ha, mätt i kartan. Använd samma figurnummer som en annan figur om det är en del av den.</div>
+    <label>Figurnummer<input id="sd_fig" type="number" min="1" value="${maxFig+1}"></label>
+    <label>Huvudgrupp<select id="sd_grp">${Object.keys(GRP).map(g=>`<option>${g}</option>`).join('')}</select></label>
+    <label>Utvecklingsklass<select id="sd_utv"><option value="">Ej angivet</option>${Object.keys(UTV).filter(k=>k!=='Ej klassad').map(k=>`<option>${esc(k)}</option>`).join('')}</select></label>
+    <label>Trädslag<select id="sd_tsl"><option value="">Ej angivet</option>${Object.keys(TSL).filter(k=>k!=='Ej angivet').map(k=>`<option>${esc(k)}</option>`).join('')}</select></label>
+    <label>Volym, m³/ha (valfritt)<input id="sd_vol" type="number" min="0" step="0.1"></label>
+    <label>Anteckning (valfritt)<textarea id="sd_note" rows="2"></textarea></label>
+    <div style="display:flex;gap:8px"><button class="btn" data-do="savecustom" type="button">Spara bestånd</button><button class="btn sec" data-do="closestanddlg" type="button">Tillbaka</button></div>`;
+  $('#standdlg').hidden=false;
+}
+function saveCustomStand(){
+  const fig=parseInt($('#sd_fig').value,10);
+  if(!(fig>=1)){toast('Ange ett figurnummer');return;}
+  const vol=$('#sd_vol').value===''?0:Number($('#sd_vol').value);
+  const id=Math.max(900000,...customStands.map(c=>c.id))+1;
+  const props={fig,ha:Math.round(ringAreaHa(drawPts)*1000)/1000,grp:$('#sd_grp').value,utv:$('#sd_utv').value||null,tsl:$('#sd_tsl').value||null,fert:'',mark:'',dran:'',till:'',vol:Math.round(vol*10)/10,timmer:0,massa:0,cutR:0,silvR:0};
+  const note=$('#sd_note').value.trim();if(note)props.note=note;
+  customStands.push({id,ring:drawPts.map(p=>[Math.round(p[0]*1e6)/1e6,Math.round(p[1]*1e6)/1e6]),props,created:new Date().toISOString()});
+  $('#standdlg').hidden=true;endDraw();
+  saveActions();applyStands();select(id,{zoom:true});toast('Eget bestånd sparat');
+}
+function drawUndo(){if(drawPts.length){drawRedo.push(drawPts.pop());updateDraw();}}
+function drawRedoStep(){if(drawRedo.length){drawPts.push(drawRedo.pop());updateDraw();}}
+map.on('click',e=>{if(drawMode){drawPts.push([e.latlng.lng,e.latlng.lat]);drawRedo=[];updateDraw();}});
+document.addEventListener('keydown',e=>{
+  if(!drawMode||!$('#standdlg').hidden)return;
+  const k=(e.key||'').toLowerCase(),mod=e.ctrlKey||e.metaKey;
+  if(mod&&k==='z'&&!e.shiftKey){e.preventDefault();drawUndo();}
+  else if(mod&&(k==='y'||(k==='z'&&e.shiftKey))){e.preventDefault();drawRedoStep();}
+  else if(k==='escape'){endDraw();}
+});
+$('#drawbtn').onclick=()=>{drawMode?endDraw():startDraw();};
+$('#drawundo').onclick=drawUndo;
+$('#drawgps').onclick=()=>{if(!gpsLast){toast('Slå på GPS-knappen först');return;}drawPts.push([gpsLast[1],gpsLast[0]]);updateDraw();};
+$('#drawdone').onclick=()=>{if(drawPts.length<3){toast('Sätt minst tre hörn');return;}openStandDlg();};
+$('#drawcancel').onclick=endDraw;
+
+
+/* ---------- Underlag för åtgärdsansökan (Skogsportalen) ---------- */
+const LR_CATS=['Klenare gallring','Grövre gallring','Avlägsnande av överståndare','Avverkning och plantering','Avverkning för naturlig förnyelse (fröträd/skärmställning)','Avverkning för naturlig förnyelse + plantering','Annat'];
+function lrCategory(a){
+  if(a.type==='Gallring')return a.sub==='Förstagallring'?'Klenare gallring':'Grövre gallring';
+  if(a.type==='Avlägsnande av överståndare')return 'Avlägsnande av överståndare';
+  if(a.type==='Slutavverkning'){
+    const fo=a.fornyelse||(a.sub==='Kalyta'?'Plantering':'Naturlig förnyelse');
+    if(fo==='Plantering')return 'Avverkning och plantering';
+    if(fo==='Naturlig förnyelse + plantering')return 'Avverkning för naturlig förnyelse + plantering';
+    return 'Avverkning för naturlig förnyelse (fröträd/skärmställning)';
+  }
+  return 'Annat';
+}
+const PREP_TYPES=['Gallring','Avlägsnande av överståndare','Slutavverkning'];
+function geomRings(g){if(!g)return [];if(g.type==='Polygon')return [g.coordinates[0]];if(g.type==='MultiPolygon')return g.coordinates.map(p=>p[0]);return [];}
+function standRings(id){const f=byId.get(id);return f?f.geometry.coordinates.map(p=>p[0]):[];}
+function ringBox(r){let a=1e9,b=1e9,c=-1e9,d=-1e9;r.forEach(p=>{a=Math.min(a,p[0]);b=Math.min(b,p[1]);c=Math.max(c,p[0]);d=Math.max(d,p[1]);});return [a,b,c,d];}
+function segCross(a,b,c,d){const o=(p,q,r)=>(q[0]-p[0])*(r[1]-p[1])-(q[1]-p[1])*(r[0]-p[0]);return o(c,d,a)*o(c,d,b)<0&&o(a,b,c)*o(a,b,d)<0;}
+function ringsOverlap(A,B){
+  const x=ringBox(A),y=ringBox(B);
+  if(x[0]>y[2]||y[0]>x[2]||x[1]>y[3]||y[1]>x[3])return false;
+  if(A.some(p=>pip(p,B))||B.some(p=>pip(p,A)))return true;
+  for(let i=0;i<A.length;i++)for(let j=0;j<B.length;j++)if(segCross(A[i],A[(i+1)%A.length],B[j],B[(j+1)%B.length]))return true;
+  return false;
+}
+function protectChecks(ids){
+  const out=[],fd=LRV.data.forn;
+  if(!fd)out.push('Fornminnen: kartlagret är inte laddat. Slå på Fornminnen under Kartlager och öppna underlaget igen.');
+  else{
+    const near=[];
+    fd.filter(f=>f.__layer.kind==='obj').forEach((f,i)=>{const c=featCenter(f),d=minDistToStands(c.lat,c.lng,ids);if(d<=100)near.push(`${fornTitle(f.properties,i)} (${Math.round(d)} m)`);});
+    out.push(near.length?`Fornminnen inom 100 m från valda figurer: ${near.join('; ')}.`:'Inga fornminnen inom 100 m från valda figurer enligt kartlagret.');
+  }
+  const sr=ids.flatMap(id=>standRings(id));
+  [['nat','Naturreservat'],['n2k','Natura 2000']].forEach(([k,name])=>{
+    const dt=LRV.data[k];
+    if(!dt){out.push(`${name}: kartlagret är inte laddat.`);return;}
+    const hit=[];dt.forEach(f=>{if(geomRings(f.geometry).some(R=>sr.some(S=>ringsOverlap(S,R))))hit.push(fornTitle(f.properties,0,name));});
+    out.push(hit.length?`${name} överlappar valda figurer: ${hit.join('; ')}.`:`Ingen överlappning med ${name.toLowerCase()} enligt kartlagret.`);
+  });
+  if(ids.some(i=>eff(i).grp==='Impediment'))out.push('Impediment ingår: träd på bergsimpediment kan vara särskilt hänsynskrävande biotop (förordning 1998:86, 11 §).');
+  return out;
+}
+const autoSkydd=checks=>'Kontrollerat i appen: '+checks.join(' ')+'\nSå beaktas skyddade objekt: ';
+let prep=null;
+function prepOpen(aid){
+  const a=actions.find(x=>x.id===aid);if(!a)return;
+  const sv=a.prep||{};
+  prep={aid,figs:(sv.figs&&sv.figs.length?sv.figs:[a.standId]).filter(i=>byId.has(i)),cut:sv.cut??'',cat:sv.cat||lrCategory(a),markb:sv.markb||a.markb||'',avverkare:sv.avverkare||a.avverkare||'',skydd:sv.skydd??null,tillagg:sv.tillagg||''};
+  if(!prep.figs.length)prep.figs=[a.standId];
+  renderPrep();$('#prepdlg').hidden=false;
+}
+function prepCollect(){
+  if(!prep||$('#prepdlg').hidden)return;
+  const g=id=>{const e=$('#'+id);return e?e.value:null;};
+  const set=(k,id)=>{const v=g(id);if(v!==null)prep[k]=v;};
+  set('cut','pd_cut');set('cat','pd_cat');set('markb','pd_markb');set('avverkare','pd_avv');set('skydd','pd_skydd');set('tillagg','pd_till');
+  CONTACT_FIELDS.forEach(k=>{const e=$('#pd_c_'+k);if(e)contact[k]=e.value.trim();});
+}
+function prepTotals(){const tot=prep.figs.reduce((s,i)=>s+eff(i).ha,0),cut=Number(String(prep.cut).replace(',','.'))||0;return {tot,cut,net:Math.max(0,tot-cut)};}
+function renderPrep(){
+  const a=actions.find(x=>x.id===prep.aid),{tot,cut,net}=prepTotals(),checks=protectChecks(prep.figs);
+  const skydd=prep.skydd!=null?prep.skydd:autoSkydd(checks);
+  const sel=(id,arr,cur,ph)=>`<select id="${id}"><option value="">${ph}</option>${arr.map(v=>`<option ${v===cur?'selected':''}>${esc(v)}</option>`).join('')}</select>`;
+  const cf=(k,l)=>`<label>${l}<input id="pd_c_${k}" value="${esc(contact[k]||'')}" autocomplete="off"></label>`;
+  $('#prepbox').innerHTML=`<b style="font-size:17px">Underlag för åtgärdsansökan</b>
+    <div class="small muted">${esc(actLabel(a))}, planerat ${a.year}. Följer stegen i Skogsportalen. Skicka in ansökan där.</div>
+    <h3 style="margin:6px 0 0">1. Figurer</h3>
+    ${prep.figs.map(i=>{const q=eff(i);return `<div class="sugrow"><span>Figur ${esc(q.fig)} (Standid ${i}) · ${nf(q.ha,2)} ha · ${esc(q.grp)}</span><button class="lnk red" data-do="prepdel" data-sid="${i}">Ta bort</button></div>`;}).join('')}
+    <div class="two"><label>Lägg till figur (nummer)<input id="pd_addfig" inputmode="numeric" placeholder="t.ex. 59"></label><button class="btn sec" data-do="prepadd" type="button" style="align-self:end">Lägg till</button></div>
+    <div class="small"><b>Total yta ${nf(tot,2)} ha</b>${cut?` · bortklippt ${nf(cut,2)} ha · kvar ${nf(net,2)} ha`:''}${net>0.5&&a.type==='Slutavverkning'?' · <span style="color:#9c2018">över 0,5 ha: godkänd förnyelseplan krävs</span>':''}</div>
+    <label>Yta som klipps bort i Skogsportalen, ha (uppskattning, valfritt)<input id="pd_cut" inputmode="decimal" value="${esc(prep.cut)}"></label>
+    <h3 style="margin:6px 0 0">2. Kontaktuppgifter för beslut (markägare)</h3>
+    <div class="two">${cf('fornamn','Förnamn')}${cf('efternamn','Efternamn')}</div>${cf('adress','Näradress')}
+    <div class="two">${cf('postnr','Postnummer')}${cf('postort','Postort')}</div><div class="two">${cf('tel','Telefon')}${cf('epost','E-post')}</div>
+    <h3 style="margin:6px 0 0">3. Åtgärdsbeskrivning</h3>
+    <label>Planerad åtgärd (Skogsportalens val)${sel('pd_cat',LR_CATS,prep.cat,'Välj')}</label>
+    <label>Markberedning${sel('pd_markb',['Ja','Nej'],prep.markb,'Välj')}</label>
+    <label>Avverkare${sel('pd_avv',AVVERKARE,prep.avverkare,'Välj')}</label>
+    <label>Plan för hur skyddade områden ska beaktas<textarea id="pd_skydd" rows="5">${esc(skydd)}</textarea></label>
+    <label>Tilläggsuppgifter<textarea id="pd_till" rows="2">${esc(prep.tillagg)}</textarea></label>
+    <h3 style="margin:6px 0 0">Kontroller i appen</h3>
+    ${checks.map(c=>`<div class="small">• ${esc(c)}</div>`).join('')}
+    <div class="small muted">Skogsportalen klipper själv bort lagskyddade biotoper. Appens kontroller bygger bara på de lager som är laddade här. Åtgärden får inte påbörjas före beslutet är mottaget, och är avverkaren Privat eller okänd måste du se till att hen får beslutet.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-do="prepcopy" type="button">Kopiera text</button><button class="btn sec" data-do="prepdl" type="button">Ladda ner text</button><button class="btn sec" data-do="prepgeo" type="button">Ladda ner figurer (.geojson)</button></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sec" data-do="prepsave" type="button">Spara utkast</button><button class="btn sec" data-do="prepclose" type="button">Stäng</button><a class="btn sec" style="text-decoration:none;display:inline-block" href="https://skog.gov.ax/" target="_blank" rel="noopener">Öppna Skogsportalen</a></div>`;
+}
+function prepText(){
+  prepCollect();
+  const a=actions.find(x=>x.id===prep.aid),{tot,cut,net}=prepTotals(),c=contact,checks=protectChecks(prep.figs);
+  const skydd=prep.skydd!=null&&prep.skydd!==''?prep.skydd:autoSkydd(checks);
+  const L=['UNDERLAG FÖR ÅTGÄRDSANSÖKAN (Skogsportalen)','Fastighet: '+PROP,'Planerat år: '+a.year,
+    'Figurer: '+prep.figs.map(i=>{const q=eff(i);return `${q.fig} (Standid ${i}, ${nf(q.ha,2)} ha)`;}).join('; '),
+    `Total yta: ${nf(tot,2)} ha${cut?`, varav bortklippt ${nf(cut,2)} ha, kvar ${nf(net,2)} ha`:''}`,
+    'Planerad åtgärd: '+prep.cat+(a.sub?` (${actLabel(a)})`:''),
+    'Markberedning: '+(prep.markb||'Ej angivet'),'Avverkare: '+(prep.avverkare||'Ej angivet'),
+    'Beslut skickas till: '+([[c.fornamn,c.efternamn].filter(Boolean).join(' '),c.adress,[c.postnr,c.postort].filter(Boolean).join(' '),c.tel,c.epost].filter(Boolean).join(', ')||'Ej angivet'),
+    'Plan för hur skyddade områden beaktas: '+skydd];
+  if(prep.tillagg)L.push('Tilläggsuppgifter: '+prep.tillagg);
+  L.push('','Kontroller i appen:',...checks.map(x=>'- '+x),'','Åtgärden får inte påbörjas före beslut är mottaget. Kontrollera uppgifterna i Skogsportalen innan du skickar in.');
+  return L.join('\n');
+}
+function prepGeo(){
+  const fc={type:'FeatureCollection',name:'figurer_'+PROP,features:prep.figs.map(i=>{const f=byId.get(i),q=eff(i);return {type:'Feature',geometry:f.geometry,properties:{standid:i,figur:q.fig,areal_ha:q.ha,huvudgrupp:q.grp}};})};
+  download(`figurer_underlag_${PROP}.geojson`,JSON.stringify(fc),'application/geo+json');
+}
+function prepSaveDraft(){
+  prepCollect();const a=actions.find(x=>x.id===prep.aid);
+  a.prep={figs:prep.figs,cut:prep.cut,cat:prep.cat,markb:prep.markb,avverkare:prep.avverkare,skydd:prep.skydd,tillagg:prep.tillagg};
+  saveActions();toast('Utkastet sparades');
+}
+
 /* ---------- Delad plan (Firebase): inloggning och synk mellan flera användare ---------- */
 const FIREBASE_VER='12.17.1';
 const FIREBASE_CONFIG_EMBEDDED={"apiKey": "AIzaSyCXy71I85lHotJYyyGB6dSrCMUBipLfsP0", "authDomain": "skogsbruksplan-73d0f.firebaseapp.com", "projectId": "skogsbruksplan-73d0f", "storageBucket": "skogsbruksplan-73d0f.firebasestorage.app", "messagingSenderId": "688922986747", "appId": "1:688922986747:web:d859186722fb2f8677885e"};   // Firebase-konfigurationen är inte hemlig – skyddet ligger i inloggningen och Firestore-reglerna
 const CFG_LS='skogsplan:firebase';
 const CLOUD={cfg:null,api:null,db:null,auth:null,user:null,synced:false,applying:false,err:null,
-  got:{},meta:{},remote:{},sig:{},unsubs:[],last:{actions:new Map(),edits:new Map(),follow:'',map:''}};
+  got:{},meta:{},remote:{},sig:{},unsubs:[],last:{actions:new Map(),plots:new Map(),custom:new Map(),edits:new Map(),follow:'',map:'',rem:'',contact:''}};
 const clean=o=>JSON.parse(JSON.stringify(o));
 function stable(o){
   if(o===null||typeof o!=='object')return JSON.stringify(o);
@@ -1224,6 +2031,7 @@ function showLogin(msg,o){
   $('#loginmsg').textContent=msg||'';
   $('#loginform').style.display=o.busy?'none':'';
   $('#loginlocal').hidden=!o.fallback;
+  $('#loginretry').hidden=!o.fallback;
 }
 function hideLogin(){$('#loginview').hidden=true;}
 function authMsg(e){
@@ -1263,10 +2071,12 @@ async function cloudBoot(){
   CLOUD.cfg=getFbConfig();
   updateCloudChip();
   if(!CLOUD.cfg)return;
+  $('#loginlocal').onclick=()=>{CLOUD.localMode=true;hideLogin();toast('Du arbetar utan inloggning. Ändringarna sparas bara på den här enheten tills du loggar in.');};
+  $('#loginretry').onclick=()=>location.reload();
   showLogin('Laddar…',{busy:true});
   let M;
   try{M=window.__FB_MODULES||await loadFbModules();}
-  catch(e){showLogin('Kunde inte ladda inloggningen. Kontrollera internetanslutningen.',{fallback:true});return;}
+  catch(e){showLogin('Kunde inte ladda inloggningen ('+(e&&e.message||e)+'). Kontrollera internetanslutningen och försök igen.',{fallback:true});return;}
   try{
     const app=M.initializeApp(CLOUD.cfg),auth=M.getAuth(app);
     let db;
@@ -1281,16 +2091,17 @@ async function cloudBoot(){
       try{await M.signInWithEmailAndPassword(auth,em,pw);$('#loginmsg').textContent='';}
       catch(err){$('#loginmsg').textContent=authMsg(err);}
     };
-    $('#loginlocal').onclick=()=>hideLogin();
     M.onAuthStateChanged(auth,user=>{user?onSignedIn(user):onSignedOut();});
-  }catch(e){showLogin('Konfigurationen verkar vara fel ('+(e&&e.message||e)+').',{fallback:true});}
+  }catch(e){showLogin('Inloggningen kunde inte startas ('+(e&&e.message||e)+').',{fallback:true});}
 }
 function onSignedIn(user){
   CLOUD.user=user;CLOUD.err=null;hideLogin();
-  try{CLOUD.synced=localStorage.getItem('skogsplan:cloud-synced:'+user.uid)==='1';}catch(e){CLOUD.synced=false;}
+  try{CLOUD.synced=localStorage.getItem('skogsplan:cloud-synced:'+user.uid)==='1';
+    if(localStorage.getItem('skogsplan:local-dirty')==='1'){CLOUD.synced=false;localStorage.removeItem('skogsplan:local-dirty');}}   // lokala ändringar ska slås ihop, inte skrivas över
+  catch(e){CLOUD.synced=false;}
   CLOUD.got={};CLOUD.meta={};CLOUD.remote={};CLOUD.sig={};
   const M=CLOUD.api,db=CLOUD.db,col=n=>M.collection(db,'plans',PROP,n),opts={includeMetadataChanges:true};
-  CLOUD.unsubs=['actions','edits','settings','stands'].map(k=>M.onSnapshot(col(k),opts,snap=>onSnap(k,snap),cloudErr));
+  CLOUD.unsubs=['actions','edits','settings','stands','plots','custom'].map(k=>M.onSnapshot(col(k),opts,snap=>onSnap(k,snap),cloudErr));
   updateCloudChip();renderData();
 }
 function onSignedOut(){
@@ -1298,6 +2109,12 @@ function onSignedOut(){
   CLOUD.user=null;CLOUD.synced=false;
   showLogin('');updateCloudChip();renderData();
 }
+const ARR={
+  actions:{col:'actions',get:()=>actions,set:v=>{actions=v;},toDoc:a=>clean(a),fromDoc:(d,id)=>Object.assign({},d,{id})},
+  plots:{col:'plots',get:()=>plots,set:v=>{plots=sanitizePlots(v);},toDoc:p=>clean(p),fromDoc:(d,id)=>Object.assign({},d,{id})},
+  custom:{col:'custom',get:()=>customStands,set:v=>{customStands=sanitizeCustom(v);},toDoc:c=>({id:c.id,ring:JSON.stringify(c.ring),props:clean(c.props),created:c.created||''}),
+    fromDoc:(d,id)=>({id:Number(d.id)||Number(id),ring:(()=>{try{return JSON.parse(d.ring);}catch(e){return [];}})(),props:d.props||{},created:d.created||''})}
+};
 function onSnap(kind,snap){
   CLOUD.err=null;
   CLOUD.meta[kind]={fromCache:snap.metadata.fromCache,pending:snap.metadata.hasPendingWrites};
@@ -1305,22 +2122,28 @@ function onSnap(kind,snap){
   if(kind==='stands'){applyStandsRemote();updateCloudChip();return;}
   if(!snap.metadata.fromCache)CLOUD.got[kind]=true;
   updateCloudChip();
-  if(!CLOUD.synced){if(CLOUD.got.actions&&CLOUD.got.edits&&CLOUD.got.settings)firstSync();return;}
+  if(!CLOUD.synced){if(['actions','edits','settings','plots','custom'].every(k=>CLOUD.got[k]))firstSync();return;}
   applyRemote(kind);
 }
 function firstSync(){
-  const rIds=new Set(CLOUD.remote.actions.map(d=>d.id)),rEd=new Set(CLOUD.remote.edits.map(d=>d.id));
-  const localA=actions.filter(a=>!rIds.has(a.id)),localE=Object.entries(edits).filter(([k])=>!rEd.has(String(k)));
+  const loc={};let nloc=0;
+  for(const k of Object.keys(ARR)){
+    const ids=new Set((CLOUD.remote[k]||[]).map(d=>String(d.id)));
+    loc[k]=ARR[k].get().filter(x=>!ids.has(String(x.id)));nloc+=loc[k].length;
+  }
+  const rEd=new Set((CLOUD.remote.edits||[]).map(d=>d.id));
+  const localE=Object.entries(edits).filter(([k])=>!rEd.has(String(k)));
   let take=false;
-  if(localA.length||localE.length){
-    take=confirm(`Den här enheten har ${localA.length} åtgärder och ${localE.length} ändrade bestånd som inte finns i den delade planen. Ladda upp dem?`);
+  if(nloc||localE.length){
+    take=confirm(`Den här enheten har ${loc.actions.length} åtgärder, ${loc.plots.length} provytor, ${loc.custom.length} egna bestånd och ${localE.length} ändrade bestånd som inte finns i den delade planen. Ladda upp dem?`);
   }
   CLOUD.synced=true;
   try{localStorage.setItem('skogsplan:cloud-synced:'+CLOUD.user.uid,'1');}catch(e){}
-  ['actions','edits','settings'].forEach(applyRemote);
+  ['actions','edits','settings','plots','custom'].forEach(applyRemote);
   if(take){
-    actions=actions.concat(localA);
+    Object.keys(ARR).forEach(k=>ARR[k].set(ARR[k].get().concat(loc[k])));
     localE.forEach(([k,v])=>{edits[k]=v;});
+    if(loc.custom.length)applyStands();
     persistLocal();cloudPush();remoteRender();
   }
   updateCloudChip();
@@ -1332,9 +2155,10 @@ function applyRemote(kind){
   CLOUD.sig[kind]=sig;
   CLOUD.applying=true;
   try{
-    if(kind==='actions'){
-      actions=docs.map(d=>Object.assign({},d.data,{id:d.id}));
-      CLOUD.last.actions=new Map(actions.map(a=>[a.id,stable(clean(a))]));
+    if(ARR[kind]){
+      const spec=ARR[kind];
+      spec.set(docs.map(d=>spec.fromDoc(d.data,d.id)));
+      CLOUD.last[kind]=new Map(spec.get().map(x=>[String(x.id),stable(spec.toDoc(x))]));
     }else if(kind==='edits'){
       const o={};docs.forEach(d=>{o[d.id]=d.data;});
       edits=sanitizeEdits(o);
@@ -1343,15 +2167,22 @@ function applyRemote(kind){
       const fol=docs.find(d=>d.id==='follow'),map=docs.find(d=>d.id==='map');
       followYrs=sanitizeFollow(fol&&fol.data&&fol.data.pairs?safeJSON(fol.data.pairs):{});
       CLOUD.last.follow=stable(followYrs);
+      const rm=docs.find(d=>d.id==='rem');
+      remDone=sanitizeRem(rm&&rm.data&&rm.data.pairs?safeJSON(rm.data.pairs):{});
+      CLOUD.last.rem=stable(remDone);
+      const ct=docs.find(d=>d.id==='contact');
+      contact=sanitizeContact(ct&&ct.data&&ct.data.json?safeJSON(ct.data.json):{});
+      CLOUD.last.contact=stable(contact);
       if(map&&map.data&&map.data.mmlKey){CLOUD.last.map=map.data.mmlKey;if(!mmlKey)applyKey(map.data.mmlKey);}
     }
   }finally{CLOUD.applying=false;}
+  if(kind==='custom')applyStands();
   persistLocal();remoteRender();
   return true;
 }
 function remoteRender(){
   restyle();renderActs();renderTable();updateHeader();
-  if(!(formState||editMode||moveAid||suggest))renderCard();
+  if(!(formState||editMode||moveAid||suggest||plotForm))renderCard();
   const ae=document.activeElement;
   if(!(ae&&ae.closest&&ae.closest('#pane-data')))renderData();
 }
@@ -1359,14 +2190,21 @@ function cloudPush(){
   if(!CLOUD.db||!CLOUD.user||!CLOUD.synced||CLOUD.applying)return;
   const M=CLOUD.api,db=CLOUD.db,fail=e=>cloudErr(e);
   const dref=(n,id)=>M.doc(db,'plans',PROP,n,id);
-  const A=new Map(actions.map(a=>[a.id,stable(clean(a))]));
-  A.forEach((js,id)=>{if(CLOUD.last.actions.get(id)!==js){CLOUD.last.actions.set(id,js);M.setDoc(dref('actions',id),JSON.parse(js)).catch(fail);}});
-  [...CLOUD.last.actions.keys()].forEach(id=>{if(!A.has(id)){CLOUD.last.actions.delete(id);M.deleteDoc(dref('actions',id)).catch(fail);}});
+  for(const k of Object.keys(ARR)){
+    const spec=ARR[k],last=CLOUD.last[k];
+    const cur=new Map(spec.get().map(x=>[String(x.id),stable(spec.toDoc(x))]));
+    cur.forEach((js,id)=>{if(last.get(id)!==js){last.set(id,js);M.setDoc(dref(spec.col,id),JSON.parse(js)).catch(fail);}});
+    [...last.keys()].forEach(id=>{if(!cur.has(id)){last.delete(id);M.deleteDoc(dref(spec.col,id)).catch(fail);}});
+  }
   const E=new Map(Object.entries(edits).map(([k,v])=>[String(k),stable(clean(v))]));
   E.forEach((js,id)=>{if(CLOUD.last.edits.get(id)!==js){CLOUD.last.edits.set(id,js);M.setDoc(dref('edits',id),JSON.parse(js)).catch(fail);}});
   [...CLOUD.last.edits.keys()].forEach(id=>{if(!E.has(id)){CLOUD.last.edits.delete(id);M.deleteDoc(dref('edits',id)).catch(fail);}});
   const f=stable(followYrs);
   if(f!==CLOUD.last.follow){CLOUD.last.follow=f;M.setDoc(dref('settings','follow'),{pairs:f}).catch(fail);}
+  const rs=stable(remDone);
+  if(rs!==CLOUD.last.rem){CLOUD.last.rem=rs;M.setDoc(dref('settings','rem'),{pairs:rs}).catch(fail);}
+  const cs=stable(contact);
+  if(cs!==CLOUD.last.contact){CLOUD.last.contact=cs;M.setDoc(dref('settings','contact'),{json:cs}).catch(fail);}
   if(mmlKey&&mmlKey!==BUILTIN_KEY&&mmlKey!==CLOUD.last.map){CLOUD.last.map=mmlKey;M.setDoc(dref('settings','map'),{mmlKey}).catch(fail);}
   updateCloudChip();
 }
@@ -1392,8 +2230,10 @@ function updateHeader(){let N=STANDS.features.length,H=0,V=0;STANDS.features.for
   $('#hsum').textContent=`${nf(H,1)} ha · ${N} bestånd · ca ${nf(V)} m³`;}
 updateHeader();
 renderLegend();renderCard();renderActs();renderTable();renderData();
-if(STANDS_EMBEDDED)applyStands(STANDS);
-else{try{const c=localStorage.getItem(STANDS_CACHE);if(c)applyStands(JSON.parse(c));}catch(e){}}
+{let initFc=null;
+  if(STANDS_EMBEDDED)initFc=STANDS;
+  else{try{const c=localStorage.getItem(STANDS_CACHE);if(c)initFc=JSON.parse(c);}catch(e){}}
+  if(initFc||customStands.length)applyStands(initFc||undefined);}
 setBase(prefs.base,true);setOverlay('prop',prefs.prop,true);setOverlay('ids',prefs.ids,true);
 ['forn','nat','n2k'].forEach(k=>setLR(k,!!prefs[k]));
 setSize(2);
