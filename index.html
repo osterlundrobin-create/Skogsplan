@@ -62,6 +62,24 @@ main{flex:1;min-height:0;display:grid;grid-template-columns:1fr 410px}
 #drawbar button{font:inherit;font-size:13px;padding:6px 10px;border-radius:7px;border:1px solid var(--g);background:#fff;color:var(--g);cursor:pointer}
 #drawbar button.go{background:var(--g);color:#fff}
 #map.drawing,#map.drawing .leaflet-grab,#map.drawing .leaflet-interactive,#map.drawing.leaflet-dragging .leaflet-grab{cursor:crosshair !important}
+#demobar{background:#fff3cd;color:#664d03;border-bottom:1px solid #ffe69c;padding:6px 14px;font-size:13px}
+#demobar[hidden]{display:none}
+#actbtn{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:1000;background:#fff;border:1px solid var(--line);border-radius:99px;padding:7px 14px;font:inherit;font-size:13px;font-weight:600;color:var(--g);cursor:pointer;box-shadow:0 1px 6px rgba(0,0,0,.2)}
+#actbtn.urgent{background:#b3261e;color:#fff;border-color:#b3261e}
+#measure{position:fixed;inset:0;z-index:3500;background:#000;display:flex;flex-direction:column}
+#measure[hidden]{display:none}
+#mstage{position:relative;flex:1;min-height:0;overflow:hidden;background:#111}
+#mvideo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+#mcross{position:absolute;left:50%;top:50%;width:46px;height:46px;margin:-23px 0 0 -23px;pointer-events:none}
+#mcross:before,#mcross:after{content:"";position:absolute;background:rgba(255,255,255,.95);box-shadow:0 0 3px #000}
+#mcross:before{left:22px;top:0;width:2px;height:46px}
+#mcross:after{top:22px;left:0;height:2px;width:46px}
+.mline{position:absolute;top:0;bottom:0;width:2px;background:#ffeb3b;box-shadow:0 0 3px #000;display:none}
+#mtop{position:absolute;top:0;left:0;right:0;display:flex;gap:10px;align-items:center;justify-content:space-between;padding:8px 12px;background:rgba(0,0,0,.55);color:#fff;font-size:14px;z-index:2}
+#mtop button{font:inherit;font-size:14px;padding:6px 12px;border-radius:8px;border:0;background:#fff;color:#1f2a22}
+#mmsg{position:absolute;left:10px;right:10px;top:54px;background:rgba(255,255,255,.95);color:#9c2018;border-radius:8px;padding:8px 10px;font-size:13px;z-index:2}
+#mpanel{background:#fff;max-height:52vh;overflow:auto;padding:12px;display:grid;gap:10px}
+.leaflet-tooltip.ptlabel{background:transparent;border:0;box-shadow:none;color:#fff;font-weight:700;font-size:12px;padding:0;text-shadow:0 0 2px #000}
 .keyrow{display:flex;gap:6px;margin:6px 0}
 .keyrow input{flex:1;min-width:0;font:inherit;padding:6px 8px;border:1px solid #c4cbc0;border-radius:6px}
 #legend{position:absolute;left:10px;bottom:22px;z-index:1000;background:rgba(255,255,255,.95);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12px;box-shadow:0 1px 6px rgba(0,0,0,.15)}
@@ -156,6 +174,7 @@ aside.mini .pane,aside.mini .tabs{display:none}
   <span class="sum" id="hsum"></span>
   <button id="cloudchip" type="button" hidden></button>
 </header>
+<div id="demobar" hidden><b>Testversion.</b> Allt du lägger in sparas bara i den här webbläsaren och syns inte i den riktiga planen. Rensar du webbläsarens data försvinner det.</div>
 <main>
   <div id="mapwrap">
     <div id="map"></div>
@@ -177,10 +196,12 @@ aside.mini .pane,aside.mini .tabs{display:none}
         <div class="row"><input type="checkbox" id="lrn2k"><label for="lrn2k">Natura 2000</label></div>
       </details>
       <button class="btn sec" id="drawbtn" type="button">Rita eget bestånd</button>
+      <button class="btn sec" id="quickbtn" type="button">Snabbmätning</button>
       <div class="row"><input type="checkbox" id="coordchk"><label for="coordchk">Koordinater vid klick/tryck</label></div>
       <div class="row"><input type="checkbox" id="lblchk" checked><label for="lblchk">Figurnummer (zooma in)</label></div>
       <button class="btn sec" id="fitbtn" type="button">Visa hela fastigheten</button>
     </div></div>
+    <button id="actbtn" type="button">Åtgärder</button>
     <div id="legend"></div>
     <button id="gpsinfo" type="button" hidden></button>
     <div id="drawbar" hidden><span id="drawinfo" class="small"></span><button id="drawundo" type="button">Ångra</button><button id="drawgps" type="button">+ Min position</button><button id="drawdone" class="go" type="button">Klar</button><button id="drawcancel" type="button">Avbryt</button></div>
@@ -199,6 +220,14 @@ aside.mini .pane,aside.mini .tabs{display:none}
     <section class="pane" id="pane-data"></section>
   </aside>
 </main>
+<div id="measure" hidden>
+  <div id="mstage"><video id="mvideo" autoplay playsinline muted></video>
+    <div class="mline" id="mlineL"></div><div class="mline" id="mlineR"></div><div id="mcross"></div>
+    <div id="mtop"><b id="mtitle"></b><span id="melev"></span><button id="mclose" type="button">Klar</button></div>
+    <div id="mmsg" hidden></div></div>
+  <div id="mpanel"></div>
+</div>
+<div id="quickdlg" class="modal" hidden><div class="box" id="quickbox"></div></div>
 <div id="prepdlg" class="modal" hidden><div class="box" id="prepbox" style="max-width:580px"></div></div>
 <div id="standdlg" class="modal" hidden><div class="box" id="standdlgbox"></div></div>
 <div id="loginview" hidden>
@@ -223,7 +252,8 @@ const PROP = '65-407-1-27';
 const LS_KEY = 'skogsplan:' + PROP + ':v1';
 const ACTION_TYPES = ['Plantering','Markberedning','Slyröjning','Iståndsättningsröjning','Gallring','Avlägsnande av överståndare','Slutavverkning','Annat'];
 const VOL_TYPES = ['Gallring','Avlägsnande av överståndare','Slutavverkning','Annat'];
-const APP_VERSION='2026-11-13 (omgång 3)';
+const APP_VERSION='2026-11-14 (omgång 5)';
+const DEMO_BANNER=false;   // true i demofilen som delas med andra
 const AVVERKARE=['Ålands Skogsindustrier Ab','SkogAx Åland Ab','Privat','Okänd'];
 const MAIN_TREES=['Tall','Gran','Björk'];
 const SPECIAL_TREES=['Glasbjörk','Klibbal','Ek','Lönn','Ask','Alm','Lind'];
@@ -264,7 +294,7 @@ let customStands = [];  // egna bestånd som ritats i kartan
 let contact = {};       // ägarens kontaktuppgifter för beslut (delas med din bror)
 let remDone = {};   // avklarade påminnelser: nyckel -> datum
 const sanitizeCustom=arr=>(Array.isArray(arr)?arr:[]).filter(c=>c&&Number.isFinite(+c.id)&&Array.isArray(c.ring)&&c.ring.length>=3&&c.ring.every(p=>Array.isArray(p)&&isFinite(p[0])&&isFinite(p[1]))&&c.props&&typeof c.props==='object').map(c=>({id:+c.id,ring:c.ring.map(p=>[+p[0],+p[1]]),props:c.props,created:c.created||''}));
-const sanitizePlots=arr=>(Array.isArray(arr)?arr:[]).filter(p=>p&&p.id&&Number.isFinite(+p.standId)&&(p.kind==='relaskop'||p.kind==='plant')).map(p=>({...p,standId:+p.standId}));
+const sanitizePlots=arr=>(Array.isArray(arr)?arr:[]).filter(p=>p&&p.id&&Number.isFinite(+p.standId)&&['relaskop','plant','height','point'].includes(p.kind)).map(p=>({...p,standId:+p.standId}));
 const CONTACT_FIELDS=['fornamn','efternamn','adress','postnr','postort','tel','epost'];
 const sanitizeContact=o=>{const r={};if(o&&typeof o==='object')CONTACT_FIELDS.forEach(k=>{if(typeof o[k]==='string')r[k]=o[k].slice(0,200);});return r;};
 const sanitizeRem=o=>{const r={};if(o&&typeof o==='object')for(const [k,v] of Object.entries(o))if(typeof v==='string'&&k.length<140)r[k]=v;return r;};   // egna intervall: 'nyckel#index' -> år
@@ -284,7 +314,7 @@ function sanitizeEdits(o){
   const r={};
   if(o&&typeof o==='object')for(const [k,v] of Object.entries(o)){
     const id=+k;
-    if(Number.isFinite(id)&&v&&typeof v==='object'){const e={};for(const f of [...EDIT_FIELDS,'age','ageYear','dbh','g','skogstyp','note'])if(f in v)e[f]=v[f];if(Object.keys(e).length)r[id]=e;}
+    if(Number.isFinite(id)&&v&&typeof v==='object'){const e={};for(const f of [...EDIT_FIELDS,'age','ageYear','dbh','g','hojd','skogstyp','note'])if(f in v)e[f]=v[f];if(Object.keys(e).length)r[id]=e;}
   }
   return r;
 }
@@ -298,7 +328,7 @@ function persistLocal(){
   try{localStorage.setItem(LS_KEY,JSON.stringify({version:5,saved:new Date().toISOString(),actions,edits,follow:followYrs,rem:remDone,plots,custom:customStands,contact}));}
   catch(e){toast('Kunde inte spara i webbläsaren – ta en backup under fliken Data');}
 }
-function saveActions(){persistLocal();cloudPush();}
+function saveActions(){persistLocal();cloudPush();try{renderPtMarkers();}catch(e){}}
 const actsFor = id=>actions.filter(a=>a.standId===id);
 function actStatus(id){
   const a=actsFor(id);if(!a.length)return 'Ingen';
@@ -605,7 +635,7 @@ function renderFornView(el){
   const cb=$('#fornnear');if(cb)cb.onchange=e=>{fornNear=e.target.checked;renderTable();};
 }
 function tviewHTML(){
-  return `<div class="filters"><button class="btn ${tView==='stands'?'':'sec'}" data-do="tview" data-v="stands" style="flex:1">Bestånd</button><button class="btn ${tView==='forn'?'':'sec'}" data-do="tview" data-v="forn" style="flex:1">Fornminnen</button></div>`;
+  return `<div class="filters"><button class="btn ${tView==='stands'?'':'sec'}" data-do="tview" data-v="stands" style="flex:1">Bestånd</button><button class="btn ${tView==='forn'?'':'sec'}" data-do="tview" data-v="forn" style="flex:1">Fornminnen</button><button class="btn ${tView==='loose'?'':'sec'}" data-do="tview" data-v="loose" style="flex:1">Lösa mätn.</button></div>`;
 }
 function fornTo(i){
   const x=fornItems().find(y=>y.i===i);if(!x)return;
@@ -680,6 +710,7 @@ map.createPane('gps');
 map.getPane('gps').style.zIndex=660;
 map.getPane('gps').style.pointerEvents='none';
 let drawMode=false;
+let gpsAccVal=0;
 let gpsState=0,gpsWatch=null,gpsDot=null,gpsAcc=null,gpsLast=null,gpsCentered=false;
 function pip(pt,ring){
   let inside=false;
@@ -725,6 +756,7 @@ function onPos(p){
   const accTxt=acc?` · ±${Math.round(acc)} m`:'';
   if(id!=null){const q=eff(id);el.dataset.sid=id;el.textContent=`Du är i figur ${q.fig} (${id})${accTxt}`;}
   else{delete el.dataset.sid;el.textContent=`Utanför bestånden${accTxt}`;}
+  el.textContent+=navInfoText(ll);updateNav();updatePtDistances();gpsAccVal=acc;
 }
 function onGpsErr(err){
   if(err&&err.code===1){
@@ -833,7 +865,7 @@ let bounds = null;
 function fit(){if(bounds&&bounds.isValid())map.fitBounds(bounds.pad(0.05));}
 const t0=Date.now();
 if(window.ResizeObserver)new ResizeObserver(()=>{map.invalidateSize();if(Date.now()-t0<4000)fit();}).observe($('#map'));
-function restyle(){gj.eachLayer(l=>l.setStyle(styleFor(l.feature)));const s=layers.get(selId);if(s)s.bringToFront();renderLegend();}
+function restyle(){gj.eachLayer(l=>l.setStyle(styleFor(l.feature)));const s=layers.get(selId);if(s)s.bringToFront();renderLegend();try{renderPtMarkers();}catch(e){}}
 function updLabels(){map.getContainer().classList.toggle('hidelabels',!($('#lblchk').checked&&map.getZoom()>=15));}
 map.on('zoomend',updLabels);updLabels();
 
@@ -909,7 +941,7 @@ let formState=null; // {aid:null|string, status}
 let editMode=false;
 let suggest=null; // {standId, from, items:[{type,sub,year,note}]}
 let moveAid=null;
-function select(id,{zoom=false,tab=true}={}){
+function select(id,{zoom=false,tab=true,noGrow=false}={}){
   closeOverlays(true);
   selId=id;formState=null;editMode=false;suggest=null;moveAid=null;plotForm=null;
   restyle();renderCard();renderTable();
@@ -917,8 +949,17 @@ function select(id,{zoom=false,tab=true}={}){
   const l=layers.get(id);
   if(zoom&&l)map.fitBounds(l.getBounds().pad(0.5),{maxZoom:18});
   $('#pane-card').scrollTop=0;
-  if(isMobile()&&sizeIdx<3)setSize(3);
+  if(isMobile()&&sizeIdx<3&&!noGrow)setSize(3);
 }
+function gotoMap(id){
+  const l=layers.get(id);if(!l)return;
+  select(id,{zoom:false,tab:false,noGrow:true});
+  if(isMobile())setSize(0);else showTab('card');
+  setTimeout(()=>{map.invalidateSize();map.fitBounds(l.getBounds().pad(0.5),{maxZoom:18});},160);
+  toast('Tryck på Åtgärder uppe på kartan för att komma tillbaka till listan.');
+}
+function openActions(){closeOverlays(false);showTab('acts');if(isMobile())setSize(3);const p=$('#pane-acts');if(p)p.scrollTop=0;}
+function updateActBtn(n){const b=$('#actbtn');if(!b)return;b.textContent=n?`Åtgärder (${n})`:'Åtgärder';b.classList.toggle('urgent',n>0);}
 
 /* ---------- card ---------- */
 function groupSummary(){
@@ -971,6 +1012,7 @@ function renderCard(){
       ${p.age!=null?`<tr><td>Medelålder</td><td>${nf(p.age)} år</td></tr>`:''}
       ${p.note?`<tr><td>Anteckning</td><td>${esc(p.note)}</td></tr>`:''}
       ${p.g!=null?`<tr><td>Grundyta (uppmätt)</td><td>${nf(p.g,1)} m²/ha</td></tr>`:''}
+      ${p.hojd!=null?`<tr><td>Medelhöjd (uppmätt)</td><td>${nf(p.hojd,1)} m</td></tr>`:''}
       <tr><td>Skogstyp (förordningen)</td><td>${esc((edits[p.id]||{}).skogstyp||'Ej angiven')}</td></tr>
       ${p.dbh!=null?`<tr><td>Medeldiameter (Dbrh)</td><td>${nf(p.dbh,1)} cm</td></tr>`:''}
       <tr><td>Fertilitetsklass (LR-data)</td><td>${esc(p.fert)}</td></tr>
@@ -986,6 +1028,7 @@ function renderCard(){
     ${list.length?list.map(a=>actItem(a)).join(''):(formState?'':'<p class="muted small">Inga åtgärder inlagda för det här beståndet.</p>')}
     ${p.custom?'<p><button class="btn danger" data-do="delcustom">Ta bort eget bestånd</button></p>':''}
     <p style="margin-top:16px"><button class="lnk" data-do="clearsel">← Tillbaka till översikt</button></p>`;
+  try{volCalcUpdate();}catch(e){}
 }
 function editHTML(){
   const p=eff(selId);
@@ -1202,7 +1245,7 @@ function upcomingHTML(){
     for(const a of items){
       if(shown>=12)continue;shown++;
       const p=eff(a.standId);
-      h+=`<button class="lnk" style="display:block;text-align:left;text-decoration:none;color:inherit;width:100%;padding:5px 0;border-bottom:1px solid var(--line)" data-do="goto" data-sid="${a.standId}"><b>${esc(actLabel(a))}</b> <span class="muted">${a.year}</span><br><span class="small muted">Figur ${esc(p.fig)} · ${nf(p.ha,2)} ha · ${esc(p.grp)}</span></button>`;
+      h+=`<button class="lnk" style="display:block;text-align:left;text-decoration:none;color:inherit;width:100%;padding:5px 0;border-bottom:1px solid var(--line)" data-do="gotomap" data-sid="${a.standId}"><b>${esc(actLabel(a))}</b> <span class="muted">${a.year}</span><br><span class="small muted">Figur ${esc(p.fig)} · ${nf(p.ha,2)} ha · ${esc(p.grp)}</span></button>`;
     }
   }
   if(total>shown)h+=`<p class="small"><button class="lnk" data-do="showplanned">Visa alla ${total} planerade åtgärder →</button></p>`;
@@ -1211,7 +1254,7 @@ function upcomingHTML(){
 function remRowHTML(r){
   const key=esc(r.key);
   return `<div class="rem rem-${r.level}"><div class="rt">${esc(r.title)}</div><div class="small muted">${esc(r.detail)}</div>
-    <div class="links"><button class="lnk" data-do="goto" data-sid="${r.standId}">Visa</button><button class="lnk" data-do="remdone" data-key="${key}">Klar</button></div></div>`;
+    <div class="links"><button class="lnk" data-do="gotomap" data-sid="${r.standId}">Visa</button><button class="lnk" data-do="remdone" data-key="${key}">Klar</button></div></div>`;
 }
 function remindersHTML(limit){
   const all=computeReminders(),list=limit?all.slice(0,limit):all;
@@ -1223,6 +1266,7 @@ function updateRemBadge(){
   const n=computeReminders().filter(r=>r.level!=='info').length;
   const t=document.querySelector('.tab[data-tab=acts]');
   if(t)t.textContent=n?`Åtgärder (${n})`:'Åtgärder';
+  updateActBtn(n);
 }
 
 function actItem(a,showStand){
@@ -1234,7 +1278,7 @@ function actItem(a,showStand){
       ${showStand?`<div class="small">${esc(label(p))} · ${nf(p.ha,2)} ha · ${esc(p.grp)}</div>`:''}
       ${a.note?`<div class="small muted" style="margin-top:3px">${esc(a.note)}</div>`:''}
  ${moveAid===a.id?moveBoxHTML(a):''}
-      <div class="links">${showStand?`<button class="lnk" data-do="goto" data-sid="${a.standId}">Visa på kartan</button>`:''}
+      <div class="links">${showStand?`<button class="lnk" data-do="gotomap" data-sid="${a.standId}">Visa på kartan</button>`:''}
       ${a.status==='planerad'?`<button class="lnk" data-do="move" data-aid="${a.id}">Flytta fram</button>`:''}
       ${PREP_TYPES.includes(a.type)?`<button class="lnk" data-do="prep" data-aid="${a.id}">Förbered underlag</button>`:''}
       <button class="lnk" data-do="edit" data-aid="${a.id}" data-sid="${a.standId}">Redigera</button>
@@ -1431,6 +1475,7 @@ function rowsData(){
 function renderTable(){
   const el=$('#pane-table');
   if(tView==='forn'){renderFornView(el);return;}
+  if(tView==='loose'){renderLooseView(el);return;}
   let r=rowsData();
   if(tGrp)r=r.filter(x=>x.grp===tGrp);
   if(tText){const q=tText.toLowerCase();r=r.filter(x=>`${x.fig} ${x.id} ${x.grp} ${x.utv} ${x.tsl}`.toLowerCase().includes(q));}
@@ -1551,6 +1596,59 @@ document.addEventListener('click',e=>{
   else if(d==='movesave'){const bx=b.closest('[data-movebox]');applyMove(aid,parseInt(bx.querySelector('.moveyr').value,10),bx);}
   else if(d==='sugadd')addSuggestions();
   else if(d==='sugskip'){suggest=null;renderCard();}
+  else if(d==='gotomap')gotoMap(sid);
+  else if(d==='usevol'){const r=volCalcCompute();if(r.missing.length){toast('Fyll i en höjd som ryms i tabellen för varje trädslag med grundyta');return;}if(!(r.total>0)){toast('Fyll i grundyta och höjd först');return;}edits[selId]=Object.assign({},edits[selId]||{},{vol:Math.round(r.total*10)/10});saveActions();afterEdit();toast('Volymen sparades på beståndet');}
+  else if(d==='measure')openMeasure(b.dataset.mode,{standId:selId});
+  else if(d==='qmeasure'){$('#quickdlg').hidden=true;openMeasure(b.dataset.mode,{standId:null});}
+  else if(d==='qlist'){$('#quickdlg').hidden=true;tView='loose';showTab('table');renderTable();if(isMobile())setSize(3);}
+  else if(d==='qclose'){$('#quickdlg').hidden=true;}
+  else if(d==='delloose'){loose=loose.filter(x=>x.id!==b.dataset.lid);saveLoose();renderLooseMarkers();map.closePopup();if(tView==='loose')renderTable();toast('Mätningen togs bort');}
+  else if(d==='clearloose'){if(loose.length&&confirm(`Ta bort alla ${loose.length} lösa mätningar?`)){loose=[];saveLoose();renderLooseMarkers();renderTable();toast('Alla lösa mätningar togs bort');}}
+  else if(d==='moveloose'){
+    const x=loose.find(y=>y.id===b.dataset.lid);if(!x)return;
+    const n=String(window.prompt('Spara på vilket bestånd? Ange figurnummer:','')||'').trim();
+    const cand=STANDS.features.filter(f=>String(f.properties.fig)===n).sort((p,q)=>q.properties.ha-p.properties.ha);
+    if(!cand.length){toast('Hittade ingen figur med det numret');return;}
+    const rec={...x};delete rec.ts;delete rec.id;
+    plots.push({id:uid(),standId:cand[0].properties.id,created:new Date().toISOString(),...rec});
+    loose=loose.filter(y=>y.id!==x.id);saveLoose();saveActions();renderLooseMarkers();renderTable();toast('Mätningen sparades på figur '+n);
+  }
+  else if(d==='useh'){const S=plotSummary(selId);if(S.height){edits[selId]=Object.assign({},edits[selId]||{},{hojd:Math.round(S.height.mean*10)/10});saveActions();afterEdit();toast('Medelhöjden sparades på beståndet');}}
+  else if(d==='genpts'){
+    const n=Math.max(1,Math.min(30,parseInt($('#pt_n').value,10)||3));
+    const pts=genSamplePoints(selId,n);
+    pts.forEach((p,i)=>plots.push({id:uid(),standId:selId,kind:'point',nr:i+1,of:pts.length,lat:Math.round(p[0]*1e6)/1e6,lon:Math.round(p[1]*1e6)/1e6,done:false,created:new Date().toISOString()}));
+    saveActions();renderCard();toast(`${pts.length} provytor utlagda`);
+  }
+  else if(d==='delpts'){if(confirm('Ta bort de utlagda provytorna för det här beståndet? Gjorda mätningar ligger kvar.')){const ids=new Set(pointsFor(selId).map(p=>p.id));plots=plots.filter(p=>!ids.has(p.id));if(ids.has(navTarget))navTarget=null;saveActions();renderCard();updateNav();}}
+  else if(d==='navpt'){
+    navTarget=b.dataset.pid;navArrived=false;const p=plots.find(x=>x.id===navTarget);
+    if(p){if(isMobile())setSize(1);setTimeout(()=>map.setView([p.lat,p.lon],Math.max(map.getZoom(),17)),120);}
+    if(!gpsLast)toast('Slå på GPS-knappen på kartan för att se avstånd och riktning.');
+    else onPos({coords:{latitude:gpsLast[0],longitude:gpsLast[1],accuracy:gpsAccVal}});
+    updateNav();
+  }
+  else if(d==='ptdone'){const p=plots.find(x=>x.id===b.dataset.pid);if(p){p.done=!p.done;saveActions();renderCard();}}
+  else if(d==='ptrel'){const p=plots.find(x=>x.id===b.dataset.pid);if(p)openMeasure('relaskop',{standId:p.standId,pointId:p.id});}
+  else if(d==='ptplant'){const p=plots.find(x=>x.id===b.dataset.pid);if(p){plotForm={kind:'plant',pid:null,standId:p.standId,pre:{lat:p.lat,lon:p.lon,pointId:p.id}};renderCard();}}
+  else if(d==='mh_base'){const e=meanElev();if(e==null){measMsg('Inga vinklar än. Rörelsesensorerna svarar inte.');return;}meas.h.eBase=e;meas.h.eTop=null;meas.h.res=null;renderMeasPanel();}
+  else if(d==='mh_top'){const e=meanElev();if(e==null){measMsg('Inga vinklar än. Rörelsesensorerna svarar inte.');return;}if(meas.h.eBase==null){toast('Sätt basen först');return;}meas.h.eTop=e;doMeasHeight();renderMeasPanel();}
+  else if(d==='mh_reset'){meas.h={};renderMeasPanel();}
+  else if(d==='mh_save')saveHeightMeas();
+  else if(d==='mh_zero'){const m=meanRaw();if(m==null){measMsg('Inga vinklar än.');return;}measSet.zero=-m;saveMeasSet();toast('Vinkeln nollställd');renderMeasPanel();}
+  else if(d==='mh_scale'){const k=Number($('#mh_known').value),r=meas.h.res;if(!(k>0)||!r||!r.ok){toast('Mät först ett föremål med känd höjd och ange höjden');return;}measSet.hscale=Math.max(0.7,Math.min(1.4,k/r.raw));saveMeasSet();doMeasHeight();renderMeasPanel();toast('Skalan justerades');}
+  else if(d==='mh_scalereset'){measSet.hscale=1;saveMeasSet();if(meas.h.eTop!=null)doMeasHeight();renderMeasPanel();}
+  else if(d==='mr_inc'){const k=b.dataset.sp;meas.counts[k]=Math.max(0,Math.round((meas.counts[k]+Number(b.dataset.d))*2)/2);renderMeasPanel();if(navigator.vibrate)try{navigator.vibrate(15);}catch(e){}}
+  else if(d==='mr_save')saveRelMeas();
+  else if(d==='mr_reset'){meas.counts={Tall:0,Gran:0,'Björk':0,'Övrigt':0};renderMeasPanel();}
+  else if(d==='mr_calstart'){meas.calib=true;meas.calGap=Math.round(relGapDisplayPx())||60;renderMeasPanel();}
+  else if(d==='mr_calcancel'){meas.calib=false;renderMeasPanel();}
+  else if(d==='mr_gap'){meas.calGap=Math.max(4,meas.calGap+Number(b.dataset.d));const t=$('#mr_gaptxt');if(t)t.textContent=Math.round(meas.calGap);positionLines();}
+  else if(d==='mr_calsave'){
+    const W=Number($('#mr_objw').value),D=Number($('#mr_cdist').value),m=stageMetrics();
+    if(!(W>0&&D>0)){toast('Ange föremålets bredd och avståndet');return;}
+    measSet.fNorm=fNormFromCalibration(meas.calGap/m.s,W,D,m.vw);saveMeasSet();meas.calib=false;renderMeasPanel();toast('Kameran är kalibrerad');
+  }
   else if(d==='prep')prepOpen(aid);
   else if(d==='prepclose'){prepCollect();$('#prepdlg').hidden=true;if(Object.keys(contact).length)saveActions();}
   else if(d==='prepsave')prepSaveDraft();
@@ -1599,7 +1697,11 @@ document.addEventListener('click',e=>{
   else if(d==='clearbound'){showUserBoundary(null);try{localStorage.removeItem('skogsplan:userboundary');}catch(e){}renderData();}
   else if(d==='wipe'){if(actions.length&&confirm(`Ta bort alla ${actions.length} åtgärder? Det går inte att ångra (ta backup först).`)){actions=[];saveActions();restyle();renderCard();renderActs();renderTable();renderData();}}
 });
+document.addEventListener('toggle',e=>{if(e.target&&e.target.id==='volcalc')volOpen=e.target.open;},true);
 document.addEventListener('input',e=>{
+  if(e.target.id&&/^vc_/.test(e.target.id))volCalcUpdate();
+  if(meas&&e.target.id==='mr_objw')meas.calW=Number(e.target.value);
+  if(meas&&e.target.id==='mr_cdist')meas.calD=Number(e.target.value);
   if(e.target.name==='pl_radius'&&e.target.form&&e.target.form.id==='plotform'){const sel=e.target.form.elements.pl_preset;if(sel){const m=[...sel.options].find(o=>o.value!=='annan'&&Math.abs(Number(o.value)-Number(e.target.value))<0.005);sel.value=m?m.value:'annan';}}
   if(e.target.form&&e.target.form.id==='plotform'&&plotForm)plotCalc(e.target.form);
   const f=e.target.form;
@@ -1608,6 +1710,12 @@ document.addEventListener('input',e=>{
   const el=$('#mixsum');if(el){el.textContent='Summa: '+sum+' %'+(sum===100?' ✓':' (ska bli 100)');el.style.color=sum===100?'#1d5e22':'#7a5b00';}
 });
 document.addEventListener('change',e=>{
+  if(e.target.id&&/^mh_(method|eyeh|dist|sp)$/.test(e.target.id)&&meas){
+    const id=e.target.id,v=e.target.value;
+    if(id==='mh_method')measSet.method=v;else if(id==='mh_eyeh')measSet.eyeH=Number(v)||1.6;else if(id==='mh_dist')measSet.dist=v;else measSet.sp=v;
+    saveMeasSet();if(meas.h.eBase!=null&&meas.h.eTop!=null)doMeasHeight();renderMeasPanel();return;
+  }
+  if(e.target.id==='mr_baf'&&meas){measSet.baf=Number(e.target.value)||2;saveMeasSet();renderMeasPanel();return;}
   if(e.target.name==='pl_preset'&&e.target.form&&e.target.form.id==='plotform'){const f=e.target.form;if(e.target.value!=='annan')f.elements.pl_radius.value=e.target.value;plotCalc(f);return;}
   if(e.target.dataset&&e.target.dataset.rule){
     const v=e.target.value.trim(),k=e.target.dataset.rule;
@@ -1749,11 +1857,14 @@ function plotSummary(id){
     const lastDate=pl.map(p=>p.date||'').sort().pop()||'';
     out.plant={n:pl.length,avg,main,req,ok:avg.tot>=req,near:avg.tot<req&&avg.tot>=req-200,lastYear:+lastDate.slice(0,4)||0,lastDate};
   }
+  const hs=L.filter(p=>p.kind==='height'&&Number(p.height)>0);
+  if(hs.length){const by={};hs.forEach(p=>{(by[p.species||'Övrigt']??=[]).push(Number(p.height));});out.height={n:hs.length,mean:hs.reduce((a,p)=>a+Number(p.height),0)/hs.length,by:Object.fromEntries(Object.entries(by).map(([k,v])=>[k,{n:v.length,mean:v.reduce((a,x)=>a+x,0)/v.length}]))};}
   return out;
 }
 function plotItemHTML(p){
   let line;
-  if(p.kind==='relaskop'){const r=relG(p);line=`Relaskop (faktor ${p.baf}): <b>${nf(r.tot,1)} m²/ha</b> · Tall ${nf(r.g.Tall,1)}, Gran ${nf(r.g.Gran,1)}, Björk ${nf(r.g['Björk'],1)}, Övrigt ${nf(r.g['Övrigt'],1)}`;}
+  if(p.kind==='height'){line=`Höjdmätning: <b>${nf(p.height,1)} m</b> · ${esc(p.species||'')} · avstånd ${nf(p.dist,1)} m (${p.method==='eye'?'från ögonhöjd':'angivet'})`;}
+  else if(p.kind==='relaskop'){const r=relG(p);line=`Relaskop (faktor ${p.baf}): <b>${nf(r.tot,1)} m²/ha</b> · Tall ${nf(r.g.Tall,1)}, Gran ${nf(r.g.Gran,1)}, Björk ${nf(r.g['Björk'],1)}, Övrigt ${nf(r.g['Övrigt'],1)}`;}
   else{const r=plantHa(p);line=`Plantprovyta (r ${nf(p.radius,2)} m): <b>${nf(r.tot,0)} plantor/ha</b> · Tall ${nf(r.per.Tall,0)}, Gran ${nf(r.per.Gran,0)}, Björk ${nf(r.per['Björk'],0)}, Övrigt ${nf(r.per['Övrigt'],0)}${p.height!=null?` · höjd ${nf(p.height,0)} cm`:''}${p.sly?` · sly: ${esc(p.sly)}`:''}`;}
   return `<div class="act-item"><div class="small muted">${esc(p.date||'')}${p.lat!=null?' · '+Number(p.lat).toFixed(5)+', '+Number(p.lon).toFixed(5):''}</div><div class="small">${line}</div>${p.note?`<div class="small muted">${esc(p.note)}</div>`:''}
     <div class="links"><button class="lnk" data-do="editplot" data-pid="${esc(p.id)}">Redigera</button><button class="lnk red" data-do="delplot" data-pid="${esc(p.id)}">Ta bort</button></div></div>`;
@@ -1763,7 +1874,7 @@ function plotFormHTML(){
   const num=(n,label,val)=>`<label>${label}<input name="pl_${n}" type="number" min="0" step="1" inputmode="numeric" value="${val!=null&&val!==''?esc(val):''}"></label>`;
   let body;
   if(kind==='relaskop'){
-    body=`<label>Relaskopfaktor<select name="pl_baf">${[1,2,3,4].map(b=>`<option ${Number(p?p.baf:2)===b?'selected':''}>${b}</option>`).join('')}</select></label>
+    body=`<label>Relaskopfaktor<select name="pl_baf">${[1,2,3,4].map(b=>`<option ${Number(p?p.baf:1)===b?'selected':''}>${b}</option>`).join('')}</select></label>
       <div class="small muted">Fyll i antal stammar som räknas in per trädslag. Grundytan blir antal gånger faktor (m²/ha).</div>
       <div class="two">${PSP.map(k=>num('c_'+k,'Antal '+k.toLowerCase(),c[k])).join('')}</div>`;
   }else{
@@ -1779,7 +1890,7 @@ function plotFormHTML(){
     <label>Datum<input name="pl_date" type="date" value="${esc(p?p.date:todayStr())}"></label>
     ${body}
     <div id="plcalc" class="small" style="color:#1d5e22"></div>
-    <div class="two"><label>Latitud<input name="pl_lat" readonly value="${p&&p.lat!=null?esc(p.lat):''}"></label><label>Longitud<input name="pl_lon" readonly value="${p&&p.lon!=null?esc(p.lon):''}"></label></div>
+    <div class="two"><label>Latitud<input name="pl_lat" readonly value="${p&&p.lat!=null?esc(p.lat):((pf.pre&&pf.pre.lat!=null)?esc(pf.pre.lat):'')}"></label><label>Longitud<input name="pl_lon" readonly value="${p&&p.lon!=null?esc(p.lon):((pf.pre&&pf.pre.lon!=null)?esc(pf.pre.lon):'')}"></label></div>
     <button class="btn sec" type="button" data-do="plotgps">Hämta position från GPS</button>
     <label>Anteckning<textarea name="pl_note" rows="2">${esc(p?p.note:'')}</textarea></label>
     <div style="display:flex;gap:8px"><button class="btn" data-do="saveplot" type="button">Spara</button><button class="btn sec" data-do="cancelplot" type="button">Avbryt</button></div></form>`;
@@ -1792,13 +1903,15 @@ function plotCalc(f){
   else{const r=plantHa({radius:Number(g('radius'))||0,counts});el.textContent=`Yta ${nf(r.area,1)} m² · ${nf(r.tot,0)} plantor/ha`;}
 }
 function plotsSectionHTML(id){
-  const L=plotsFor(id),S=plotSummary(id);
-  let h='<h3>Provytor</h3>';
+  const L=plotsFor(id).filter(p=>p.kind!=='point'),S=plotSummary(id);
+  let h='<h3>Provytor och mätning</h3>';
   if(plotForm&&plotForm.standId===id)h+=plotFormHTML();
-  else h+=`<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sec" data-do="newplot" data-kind="relaskop">+ Relaskop</button><button class="btn sec" data-do="newplot" data-kind="plant">+ Plantprovyta</button></div>`;
+  else h+=`<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sec" data-do="newplot" data-kind="relaskop">+ Relaskop</button><button class="btn sec" data-do="newplot" data-kind="plant">+ Plantprovyta</button></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn sec" data-do="measure" data-mode="height">Höjdmätning (kamera)</button><button class="btn sec" data-do="measure" data-mode="relaskop">Digitalt relaskop (kamera)</button></div>`;
   if(S.rel)h+=`<p class="small"><b>Grundyta (relaskop):</b> medel ${nf(S.rel.tot,1)} m²/ha av ${S.rel.n} ytor (Tall ${nf(S.rel.g.Tall,1)}, Gran ${nf(S.rel.g.Gran,1)}, Björk ${nf(S.rel.g['Björk'],1)}, Övrigt ${nf(S.rel.g['Övrigt'],1)}). <button class="lnk" data-do="useg">Använd som beståndets grundyta</button></p>`;
   if(S.plant){const P=S.plant;h+=`<p class="small"><b>Plantbestånd:</b> medel ${nf(P.avg.tot,0)} plantor/ha av ${P.n} ytor. Gräns för ${esc(P.main.toLowerCase())}: ${P.req}/ha. <span class="chip ${P.ok?'utford':''}" style="${P.ok?'':'background:#fff1c9'}">${P.ok?'Godtagbart':P.near?'Nära gränsen (inom 200/ha kan godtas vid avvikande förhållanden)':'Under kravet'}</span></p>`;}
-  return h+L.map(plotItemHTML).join('');
+  if(S.height)h+=`<p class="small"><b>Höjd:</b> medel ${nf(S.height.mean,1)} m av ${S.height.n} träd (${Object.entries(S.height.by).map(([k,v])=>`${esc(k)} ${nf(v.mean,1)} m`).join(', ')}). <button class="lnk" data-do="useh">Använd som beståndets medelhöjd</button></p>`;
+  return h+volCalcHTML(id)+ptsHTML(id)+L.map(plotItemHTML).join('');
 }
 function savePlot(){
   const f=$('#plotform');if(!f||!plotForm)return;
@@ -1809,14 +1922,16 @@ function savePlot(){
   if(v('lat')){rec.lat=Number(v('lat'));rec.lon=Number(v('lon'));}
   if(rec.kind==='relaskop'){rec.baf=Number(v('baf'))||2;if(!Object.values(counts).some(x=>x>0)){toast('Fyll i antal stammar');return;}}
   else{rec.radius=Number(v('radius'));if(!(rec.radius>0)){toast('Ange provytans radie');return;}rec.damaged=v('dam')===''?null:Number(v('dam'));rec.height=v('hojd')===''?null:Number(v('hojd'));rec.sly=v('sly');}
+  if(plotForm.pre&&plotForm.pre.pointId)rec.pointId=plotForm.pre.pointId;
   if(plotForm.pid)Object.assign(plots.find(x=>x.id===plotForm.pid),rec);
   else plots.push({id:uid(),standId:plotForm.standId,created:new Date().toISOString(),...rec});
+  if(rec.pointId){const pt=plots.find(x=>x.id===rec.pointId);if(pt)pt.done=true;}
   plotForm=null;saveActions();renderCard();renderActs();toast('Provytan sparades');
 }
 function exportPlots(){
-  const head=['Datum','Standid','Figur','Typ','Relaskopfaktor','Radie m','Antal tall','Antal gran','Antal björk','Antal övrigt','Grundyta m2/ha','Plantor per ha','Medelhöjd cm','Skadade','Sly','Latitud','Longitud','Anteckning'];
-  const rows=plots.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(p=>{const q=eff(p.standId),c=p.counts||{};const r=p.kind==='relaskop'?relG(p):null,h=p.kind==='plant'?plantHa(p):null;
-    return [p.date,p.standId,q.fig,p.kind==='relaskop'?'Relaskop':'Plantprovyta',p.baf??'',p.radius!=null?String(p.radius).replace('.',','):'',c.Tall??0,c.Gran??0,c['Björk']??0,c['Övrigt']??0,r?String(Math.round(r.tot*10)/10).replace('.',','):'',h?Math.round(h.tot):'',p.height??'',p.damaged??'',p.sly||'',p.lat??'',p.lon??'',p.note||''];});
+  const head=['Datum','Standid','Figur','Typ','Relaskopfaktor','Radie m','Antal tall','Antal gran','Antal björk','Antal övrigt','Grundyta m2/ha','Plantor per ha','Medelhöjd cm','Skadade','Sly','Höjd m','Trädslag (höjd)','Avstånd m','Latitud','Longitud','Anteckning'];
+  const rows=plots.filter(p=>p.kind!=='point').slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(p=>{const q=eff(p.standId),c=p.counts||{};const r=p.kind==='relaskop'?relG(p):null,h=p.kind==='plant'?plantHa(p):null;
+    return [p.date,p.standId,q.fig,p.kind==='relaskop'?'Relaskop':p.kind==='height'?'Höjdmätning':'Plantprovyta',p.baf??'',p.radius!=null?String(p.radius).replace('.',','):'',c.Tall??0,c.Gran??0,c['Björk']??0,c['Övrigt']??0,r?String(Math.round(r.tot*10)/10).replace('.',','):'',h?Math.round(h.tot):'',p.kind==='plant'?(p.height??''):'',p.damaged??'',p.sly||'',p.kind==='height'?String(p.height).replace('.',','):'',p.kind==='height'?(p.species||''):'',p.kind==='height'&&p.dist!=null?String(p.dist).replace('.',','):'',p.lat??'',p.lon??'',p.note||''];});
   download(`provytor_${PROP}.csv`,'\ufeff'+[head,...rows].map(r=>r.map(csvCell).join(';')).join('\r\n'),'text/csv;charset=utf-8');
 }
 
@@ -2002,6 +2117,326 @@ function prepSaveDraft(){
   saveActions();toast('Utkastet sparades');
 }
 
+
+/* ---------- Mätning med telefonen: höjd, digitalt relaskop, snabbmätning och utlagda provytor ---------- */
+const MEAS_LS='skogsplan:meas:v1',LOOSE_LS='skogsplan:loose:v1';
+const DEFAULT_FNORM=0.5/Math.tan(35*Math.PI/180);       // antaget synfält 70° tills kameran kalibrerats
+let measSet={eyeH:1.6,method:'eye',dist:'',sp:'Tall',baf:1,hscale:1,zero:0,fNorm:null};
+try{Object.assign(measSet,JSON.parse(localStorage.getItem(MEAS_LS)||'{}'));}catch(e){}
+const saveMeasSet=()=>{try{localStorage.setItem(MEAS_LS,JSON.stringify(measSet));}catch(e){}};
+let loose=[];
+try{loose=JSON.parse(localStorage.getItem(LOOSE_LS)||'[]');if(!Array.isArray(loose))loose=[];}catch(e){loose=[];}
+const saveLoose=()=>{try{localStorage.setItem(LOOSE_LS,JSON.stringify(loose));}catch(e){toast('Kunde inte spara de lösa mätningarna');}};
+let meas=null,mStream=null;
+const ORI={beta:null,gamma:0,buf:[]};
+
+/* --- matematik (rena funktioner) --- */
+function elevFromOri(beta,gamma){const b=beta*Math.PI/180,g=gamma*Math.PI/180;return Math.asin(Math.max(-1,Math.min(1,-Math.cos(b)*Math.cos(g))))*180/Math.PI;}
+function calcHeight(eBase,eTop,method,eyeH,dist,scale){
+  const tb=Math.tan(eBase*Math.PI/180),tt=Math.tan(eTop*Math.PI/180);
+  if(!(eTop>eBase))return {ok:false,err:'Toppen måste ligga högre upp än basen i sikte.'};
+  let d;
+  if(method==='eye'){
+    if(!(tb<-0.035))return {ok:false,err:'Basen måste ligga tydligt under horisonten (minst ca 2°). Gå närmare, eller ange avståndet själv.'};
+    d=eyeH/(-tb);
+  }else d=Number(dist);
+  if(!(d>0))return {ok:false,err:'Ange avståndet till trädet.'};
+  const raw=d*(tt-tb);
+  return {ok:true,d,raw,h:raw*(scale||1)};
+}
+function relK(baf){return Math.sqrt(baf)/50;}                   // d/R för kritisk vinkel
+function relGapVideoPx(fNorm,vw,baf){return fNorm*vw*relK(baf);}
+function fNormFromCalibration(gapVideoPx,objW,dist,vw){return (gapVideoPx*dist/objW)/vw;}
+
+/* --- sensorer och kamera --- */
+const rawElev=()=>ORI.beta==null?null:elevFromOri(ORI.beta,ORI.gamma);
+const meanRaw=()=>{const b=ORI.buf.slice(-8);return b.length?b.reduce((a,x)=>a+x,0)/b.length:null;};
+const meanElev=()=>{const m=meanRaw();return m==null?null:m+(measSet.zero||0);};
+function onOri(e){if(e.beta==null)return;ORI.beta=e.beta;ORI.gamma=e.gamma||0;ORI.buf.push(rawElev());if(ORI.buf.length>15)ORI.buf.shift();updateMeasHud();}
+async function startOri(){
+  if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function'){
+    const r=await DeviceOrientationEvent.requestPermission();if(r!=='granted')throw new Error('Tillstånd till rörelsesensorer nekades');
+  }
+  window.addEventListener('deviceorientation',onOri,true);
+}
+function stopOri(){window.removeEventListener('deviceorientation',onOri,true);ORI.beta=null;ORI.buf=[];}
+function measMsg(t){const el=$('#mmsg');el.textContent=t||'';el.hidden=!t;}
+function updateMeasHud(){
+  const e=meanElev(),el=$('#melev');if(!el)return;
+  el.textContent=e==null?'Lutning: –':`Lutning ${e>=0?'+':''}${e.toFixed(1)}°`;
+  const w=$('#mr_tilt');if(w&&e!=null){const bad=Math.abs(e)>4;w.textContent=bad?`Håll telefonen lodrätt (lutning ${e.toFixed(1)}°)`:'Lodrätt ✓';w.style.color=bad?'#9c2018':'#1d5e22';}
+}
+async function openMeasure(mode,ctx){
+  if(meas)closeMeasure();
+  meas={mode,ctx:ctx||{standId:null},counts:{Tall:0,Gran:0,'Björk':0,'Övrigt':0},h:{},calib:false,calGap:60,saved:0};
+  $('#measure').hidden=false;
+  $('#mtitle').textContent=mode==='height'?'Höjdmätning':'Digitalt relaskop';
+  measMsg('');renderMeasPanel();
+  try{
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)throw new Error('kameran stöds inte här (kräver den riktiga webbadressen med https)');
+    mStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false});
+    const v=$('#mvideo');v.srcObject=mStream;v.onloadedmetadata=positionLines;
+    try{await v.play();}catch(e){}
+  }catch(e){measMsg('Kameran kunde inte startas: '+(e&&(e.message||e.name)||e)+'. Kameran fungerar bara på den riktiga webbadressen och kräver tillstånd i Chrome.');}
+  try{await startOri();}catch(e){measMsg(($('#mmsg').textContent?$('#mmsg').textContent+' ':'')+'Rörelsesensorerna kunde inte startas: '+(e&&(e.message||e.name)||e));}
+  positionLines();
+}
+function closeMeasure(){
+  if(mStream){mStream.getTracks().forEach(t=>{try{t.stop();}catch(e){}});mStream=null;}
+  const v=$('#mvideo');if(v)v.srcObject=null;
+  stopOri();$('#measure').hidden=true;meas=null;
+}
+function commitMeas(rec){
+  const ctx=meas.ctx||{};
+  rec.date=todayStr();rec.time=new Date().toTimeString().slice(0,5);
+  if(gpsLast){rec.lat=Math.round(gpsLast[0]*1e6)/1e6;rec.lon=Math.round(gpsLast[1]*1e6)/1e6;}
+  if(ctx.standId!=null){
+    if(ctx.pointId)rec.pointId=ctx.pointId;
+    plots.push({id:uid(),standId:ctx.standId,created:new Date().toISOString(),...rec});
+    if(ctx.pointId){const pt=plots.find(x=>x.id===ctx.pointId);if(pt)pt.done=true;}
+    saveActions();renderCard();renderActs();
+    toast('Mätningen sparades på beståndet');
+  }else{
+    loose.push({id:uid(),ts:Date.now(),...rec});saveLoose();renderLooseMarkers();
+    toast('Sparad som lös mätning (bara på den här enheten)');
+    if(tView==='loose')renderTable();
+  }
+  meas.saved++;
+}
+
+/* --- höjdmätning --- */
+function heightPanelHTML(){
+  const h=meas.h,res=h.res,eye=measSet.method==='eye';
+  const sp=['Tall','Gran','Björk','Övrigt'];
+  let info='';
+  if(h.eBase!=null)info+=`Bas: ${h.eBase.toFixed(1)}°`;
+  if(h.eTop!=null)info+=` · Topp: ${h.eTop.toFixed(1)}°`;
+  return `<div class="small muted">Håll telefonen upprätt och sikta med korset. Avståndet kan räknas från din ögonhöjd (plan mark) eller anges själv.</div>
+  <div class="two"><label>Metod<select id="mh_method"><option value="eye" ${eye?'selected':''}>Ögonhöjd (plan mark)</option><option value="dist" ${eye?'':'selected'}>Jag anger avståndet</option></select></label>
+  <label style="${eye?'':'display:none'}">Din ögonhöjd, m<input id="mh_eyeh" type="number" step="0.01" min="0.5" max="2.5" value="${esc(measSet.eyeH)}"></label>
+  <label style="${eye?'display:none':''}">Avstånd till trädet, m<input id="mh_dist" type="number" step="0.1" min="1" value="${esc(measSet.dist)}"></label></div>
+  <label>Trädslag<select id="mh_sp">${sp.map(x=>`<option ${measSet.sp===x?'selected':''}>${x}</option>`).join('')}</select></label>
+  <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-do="mh_base">1. Sätt basen</button><button class="btn" data-do="mh_top">2. Sätt toppen</button><button class="btn sec" data-do="mh_reset">Mäta om</button></div>
+  <div class="small">${esc(info)||'Sikta på trädets bas och tryck 1.'}</div>
+  ${res&&!res.ok?`<div class="small" style="color:#9c2018">${esc(res.err)}</div>`:''}
+  ${res&&res.ok?`<div style="font-size:22px"><b>Höjd ${nf(res.h,1)} m</b> <span class="small muted">(avstånd ${nf(res.d,1)} m)</span></div><button class="btn" data-do="mh_save">Spara mätningen</button>`:''}
+  ${meas.saved?`<div class="small muted">Sparade i den här omgången: ${meas.saved}</div>`:''}
+  <details><summary style="cursor:pointer;color:var(--g);font-weight:600">Kalibrering</summary>
+    <div class="small muted" style="margin:6px 0">Vinkel: håll telefonen helt lodrätt mot en vägg och tryck, så nollställs lutningen.</div>
+    <button class="btn sec" data-do="mh_zero">Nollställ vinkeln</button>
+    <div class="small muted" style="margin:10px 0 6px">Höjd: mät ett föremål med känd höjd (en stolpe eller ett hus). Ange sedan den riktiga höjden och tryck, så justeras skalan. Nu: ${nf((measSet.hscale||1),3)}.</div>
+    <div class="two"><label>Känd höjd, m<input id="mh_known" type="number" step="0.01" min="0"></label><button class="btn sec" data-do="mh_scale" style="align-self:end">Justera skalan</button></div>
+    <button class="lnk" data-do="mh_scalereset">Återställ skalan</button>
+  </details>`;
+}
+function doMeasHeight(){
+  const h=meas.h;
+  h.res=calcHeight(h.eBase,h.eTop,measSet.method,Number(measSet.eyeH),measSet.dist,measSet.hscale||1);
+}
+function saveHeightMeas(){
+  const r=meas.h.res;if(!r||!r.ok)return;
+  commitMeas({kind:'height',species:measSet.sp,height:Math.round(r.h*10)/10,dist:Math.round(r.d*10)/10,method:measSet.method,eyeH:Number(measSet.eyeH),eBase:Math.round(meas.h.eBase*10)/10,eTop:Math.round(meas.h.eTop*10)/10});
+  meas.h={};renderMeasPanel();
+}
+
+/* --- digitalt relaskop --- */
+function stageMetrics(){
+  const st=$('#mstage'),v=$('#mvideo');
+  const vw=v.videoWidth||1280,vh=v.videoHeight||720,dw=st.clientWidth||window.innerWidth,dh=st.clientHeight||window.innerHeight;
+  return {vw,vh,dw,dh,s:Math.max(dw/vw,dh/vh)};
+}
+function relGapDisplayPx(){
+  const m=stageMetrics();
+  if(meas&&meas.calib)return meas.calGap;
+  return relGapVideoPx(measSet.fNorm||DEFAULT_FNORM,m.vw,measSet.baf)*m.s;
+}
+function positionLines(){
+  const L_=$('#mlineL'),R_=$('#mlineR');
+  if(!meas||meas.mode!=='relaskop'){L_.style.display=R_.style.display='none';return;}
+  const m=stageMetrics(),g=relGapDisplayPx();
+  L_.style.display=R_.style.display='block';
+  L_.style.left=(m.dw/2-g/2-1)+'px';R_.style.left=(m.dw/2+g/2-1)+'px';
+}
+function relPanelHTML(){
+  const c=meas.counts,F=measSet.baf,cal=!!measSet.fNorm;
+  const tot=PSP.reduce((a,k)=>a+c[k],0)*F;
+  if(meas.calib)return `<b>Kalibrera kameran (en gång per telefon)</b>
+    <div class="small muted">Placera ett föremål med känd bredd på känt avstånd, till exempel en käpp på 1,00 m på 10,0 m. Rikta kameran mot det och flytta de gula strecken tills de ligger mot föremålets kanter. Använd samma kamera och samma zoom som när du mäter.</div>
+    <div class="two"><label>Föremålets bredd, m<input id="mr_objw" type="number" step="0.01" min="0.05" value="${meas.calW??1}"></label><label>Avstånd, m<input id="mr_cdist" type="number" step="0.1" min="1" value="${meas.calD??10}"></label></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sec" data-do="mr_gap" data-d="-10">−10</button><button class="btn sec" data-do="mr_gap" data-d="-1">−1</button><button class="btn sec" data-do="mr_gap" data-d="1">+1</button><button class="btn sec" data-do="mr_gap" data-d="10">+10</button></div>
+    <div class="small">Öppning: <span id="mr_gaptxt">${Math.round(meas.calGap)}</span> px</div>
+    <div style="display:flex;gap:8px"><button class="btn" data-do="mr_calsave">Spara kalibreringen</button><button class="btn sec" data-do="mr_calcancel">Avbryt</button></div>`;
+  return `<div class="small muted">Räkna träden runt dig i brösthöjd och vrid dig ett helt varv. Ett träd som är bredare än öppningen räknas som 1 (PPA +1), lika brett som ½ (gränsträd, PPA +0,5) och smalare som 0. Faktor 1 motsvarar din orange relaskopbricka.</div>
+  <div class="two"><label>Relaskopfaktor<select id="mr_baf">${[1,2,3,4].map(b=>`<option ${F===b?'selected':''}>${b}</option>`).join('')}</select></label><div class="small" id="mr_tilt" style="align-self:end">Lodrätt?</div></div>
+  ${cal?'':'<div class="small" style="color:#9c2018">Kameran är inte kalibrerad. Öppningen bygger på ett antaget synfält och ger fel grundyta. Kalibrera först.</div>'}
+  ${PSP.map(k=>`<div class="sugrow"><span><b>${k}</b> <span style="font-size:18px">${nf(c[k],1)}</span></span><span style="white-space:nowrap"><button class="btn sec" data-do="mr_inc" data-sp="${k}" data-d="1">+1</button> <button class="btn sec" data-do="mr_inc" data-sp="${k}" data-d="0.5">+½</button> <button class="btn sec" data-do="mr_inc" data-sp="${k}" data-d="-1">−1</button></span></div>`).join('')}
+  <div style="font-size:20px"><b>Grundyta ${nf(tot,1)} m²/ha</b> <span class="small muted">(faktor ${F})</span></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-do="mr_save">Spara mätningen</button><button class="btn sec" data-do="mr_reset">Nollställ räkningen</button><button class="btn sec" data-do="mr_calstart">${cal?'Kalibrera om':'Kalibrera kameran'}</button></div>
+  ${meas.saved?`<div class="small muted">Sparade i den här omgången: ${meas.saved}</div>`:''}`;
+}
+function saveRelMeas(){
+  const c=meas.counts;if(!PSP.some(k=>c[k]>0)){toast('Räkna minst ett träd först');return;}
+  commitMeas({kind:'relaskop',baf:measSet.baf,counts:{...c},note:`Digitalt relaskop (${measSet.fNorm?'kalibrerad':'ej kalibrerad'})`});
+  meas.counts={Tall:0,Gran:0,'Björk':0,'Övrigt':0};renderMeasPanel();
+}
+function renderMeasPanel(){
+  if(!meas)return;
+  $('#mpanel').innerHTML=meas.mode==='height'?heightPanelHTML():relPanelHTML();
+  positionLines();updateMeasHud();
+}
+
+/* --- lösa mätningar (snabbmätning) --- */
+const looseGroup=L.layerGroup().addTo(map);
+function looseSummary(x){
+  if(x.kind==='height')return `Höjd ${nf(x.height,1)} m (${x.species||''})`;
+  if(x.kind==='relaskop'){const r=relG(x);return `Grundyta ${nf(r.tot,1)} m²/ha (faktor ${x.baf})`;}
+  return 'Mätning';
+}
+function renderLooseMarkers(){
+  looseGroup.clearLayers();
+  loose.filter(x=>x.lat!=null).forEach(x=>{
+    L.circleMarker([x.lat,x.lon],{radius:7,color:'#fff',weight:2,fillColor:'#78909c',fillOpacity:1})
+      .bindPopup(`<b>Lös mätning</b><br>${esc(looseSummary(x))}<br><span class="small">${esc(x.date||'')} ${esc(x.time||'')}</span><br><button class="lnk red" data-do="delloose" data-lid="${esc(x.id)}">Ta bort</button>`).addTo(looseGroup);
+  });
+}
+function renderLooseView(el){
+  el.innerHTML=tviewHTML()+(loose.length
+    ?`<p class="small muted">${loose.length} lösa mätningar. De ligger bara på den här enheten, delas inte och ingår inte i planen.</p><p><button class="btn danger" data-do="clearloose">Rensa alla</button></p>`+
+      loose.slice().reverse().map(x=>`<div class="act-item"><div class="small muted">${esc(x.date||'')} ${esc(x.time||'')}${x.lat!=null?' · '+Number(x.lat).toFixed(5)+', '+Number(x.lon).toFixed(5):''}</div><div><b>${esc(looseSummary(x))}</b></div><div class="links"><button class="lnk" data-do="moveloose" data-lid="${esc(x.id)}">Spara på bestånd</button><button class="lnk red" data-do="delloose" data-lid="${esc(x.id)}">Ta bort</button></div></div>`).join('')
+    :'<p class="muted">Inga lösa mätningar. Starta en med Snabbmätning på kartan.</p>');
+}
+function openQuick(){
+  $('#quickbox').innerHTML=`<b style="font-size:17px">Snabbmätning</b><div class="small muted">Mätningen sparas som en lös mätning bara på den här enheten. Den påverkar inte planen, och du tar bort den i listan Lösa mätningar.</div>
+    <button class="btn" data-do="qmeasure" data-mode="height">Höjdmätning (kamera)</button><button class="btn" data-do="qmeasure" data-mode="relaskop">Digitalt relaskop (kamera)</button>
+    <button class="btn sec" data-do="qlist">Visa lösa mätningar (${loose.length})</button><button class="btn sec" data-do="qclose">Stäng</button>`;
+  $('#quickdlg').hidden=false;
+}
+
+/* --- utlagda provytor med GPS-navigering --- */
+const ptGroup=L.layerGroup().addTo(map);
+let navTarget=null,navLine=null,navArrived=false;
+const pointsFor=id=>plots.filter(p=>p.standId===id&&p.kind==='point').sort((a,b)=>a.nr-b.nr);
+function bearingDir(la1,lo1,la2,lo2){
+  const t=x=>x*Math.PI/180,y=Math.sin(t(lo2-lo1))*Math.cos(t(la2)),x=Math.cos(t(la1))*Math.sin(t(la2))-Math.sin(t(la1))*Math.cos(t(la2))*Math.cos(t(lo2-lo1));
+  const b=(Math.atan2(y,x)*180/Math.PI+360)%360;return ['N','NO','O','SO','S','SV','V','NV'][Math.round(b/45)%8];
+}
+function ringAreaPlanar(r){let a=0;for(let i=0,j=r.length-1;i<r.length;j=i++)a+=(r[j][0]+r[i][0])*(r[j][1]-r[i][1]);return Math.abs(a)/2;}
+function genSamplePoints(standId,n){
+  const f=byId.get(standId);if(!f)return [];
+  const poly=f.geometry.coordinates.reduce((a,b)=>ringAreaPlanar(b[0])>ringAreaPlanar(a[0])?b:a);
+  const lat0=poly[0][0][1],lon0=poly[0][0][0],kx=111320*Math.cos(lat0*Math.PI/180),ky=110574;
+  const rings=poly.map(r=>r.map(c=>[(c[0]-lon0)*kx,(c[1]-lat0)*ky]));
+  let minX=1e12,minY=1e12,maxX=-1e12,maxY=-1e12;
+  rings[0].forEach(p=>{minX=Math.min(minX,p[0]);minY=Math.min(minY,p[1]);maxX=Math.max(maxX,p[0]);maxY=Math.max(maxY,p[1]);});
+  const area=Math.max(1,ringAreaPlanar(rings[0])-rings.slice(1).reduce((a,r)=>a+ringAreaPlanar(r),0));
+  let step=Math.sqrt(area/n)*1.15,pts=[];
+  for(let it=0;it<60;it++){
+    pts=[];let rowNo=0;
+    for(let y=minY+step/2;y<maxY;y+=step,rowNo++){
+      const row=[];
+      for(let x=minX+step/2;x<maxX;x+=step)if(ptPolyDist(x,y,rings)>=Math.min(8,step/3))row.push([x,y]);
+      pts.push(...(rowNo%2?row.reverse():row));
+    }
+    if(pts.length>=n)break;
+    step*=0.88;
+  }
+  if(!pts.length){const lp=labelPoint(f);return [[lp[0],lp[1]]];}
+  if(pts.length>n){const out=[];for(let i=0;i<n;i++)out.push(pts[Math.round(i*(pts.length-1)/Math.max(1,n-1))]);pts=out;}
+  return pts.map(p=>[lat0+p[1]/ky,lon0+p[0]/kx]);
+}
+function ptsHTML(id){
+  const P=pointsFor(id);
+  let h='<div class="small" style="margin-top:12px"><b>Utlagda provytor</b></div>';
+  if(!P.length)return h+`<div class="two" style="margin:6px 0"><label>Antal ytor<input id="pt_n" type="number" min="1" max="30" value="${Math.max(3,Math.round(eff(id).ha*1.5))}"></label><button class="btn sec" data-do="genpts" style="align-self:end">Lägg ut</button></div><div class="small muted">Appen fördelar ytorna jämnt i beståndet. Med GPS visas avstånd och väderstreck till ytan. GPS är inte exakt (cirka 5 m), så mät upp själva ytan med snöre.</div>`;
+  h+=P.map(p=>{
+    const d=gpsLast?mDist(gpsLast[0],gpsLast[1],p.lat,p.lon):null;
+    return `<div class="act-item" style="${p.done?'opacity:.65':''}"><b>Provyta ${p.nr} av ${p.of}</b>${p.done?' <span class="chip utford">Klar</span>':''}<span class="small muted ptdist" data-pid="${esc(p.id)}">${d!=null?` · ${nf(d,0)} m ${bearingDir(gpsLast[0],gpsLast[1],p.lat,p.lon)}`:''}</span>
+      <div class="links"><button class="lnk" data-do="navpt" data-pid="${esc(p.id)}">Navigera</button><button class="lnk" data-do="ptrel" data-pid="${esc(p.id)}">Relaskop (kamera)</button><button class="lnk" data-do="ptplant" data-pid="${esc(p.id)}">Plantyta</button><button class="lnk" data-do="ptdone" data-pid="${esc(p.id)}">${p.done?'Ångra klar':'Markera klar'}</button></div></div>`;
+  }).join('');
+  return h+`<p><button class="lnk red" data-do="delpts">Ta bort utlagda ytor</button></p>`;
+}
+function renderPtMarkers(){
+  ptGroup.clearLayers();
+  plots.filter(p=>p.kind==='point'&&p.lat!=null).forEach(p=>{
+    const m=L.circleMarker([p.lat,p.lon],{radius:10,color:'#fff',weight:2,fillColor:p.done?'#66bb6a':'#fb8c00',fillOpacity:1});
+    m.bindTooltip(String(p.nr),{permanent:true,direction:'center',className:'figlabel ptlabel',interactive:false});
+    m.on('click',()=>{if(!drawMode&&!coordMode)select(p.standId,{});});
+    m.addTo(ptGroup);
+  });
+}
+function updateNav(){
+  if(navLine){map.removeLayer(navLine);navLine=null;}
+  const p=navTarget?plots.find(x=>x.id===navTarget):null;
+  if(!p||!gpsLast)return;
+  navLine=L.polyline([gpsLast,[p.lat,p.lon]],{pane:'gps',color:'#fb8c00',weight:3,dashArray:'6 6',interactive:false}).addTo(map);
+  const d=mDist(gpsLast[0],gpsLast[1],p.lat,p.lon);
+  if(d<=6&&!navArrived){navArrived=true;toast(`Du är framme vid provyta ${p.nr}.`);}
+}
+function updatePtDistances(){
+  if(!gpsLast)return;
+  document.querySelectorAll('.ptdist').forEach(el=>{const p=plots.find(x=>x.id===el.dataset.pid);if(p)el.textContent=` · ${nf(mDist(gpsLast[0],gpsLast[1],p.lat,p.lon),0)} m ${bearingDir(gpsLast[0],gpsLast[1],p.lat,p.lon)}`;});
+}
+function navInfoText(ll){
+  const p=navTarget?plots.find(x=>x.id===navTarget):null;
+  return p?` · mot provyta ${p.nr}: ${Math.round(mDist(ll[0],ll[1],p.lat,p.lon))} m ${bearingDir(ll[0],ll[1],p.lat,p.lon)}`:'';
+}
+
+
+/* ---------- Volym ur tabell: A. Nyyssönens tabeller (grundyta och medelhöjd -> stamvolym med bark, m³/ha), från relaskopkortet ---------- */
+const VOLTAB={"tall":{"G":[6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,50],"H":[6,8,10,12,14,16,18,20,22,24,26,28],"rows":{"6":[23,27,32,37,42,47,52,56,60,64,68,72],"8":[30,36,43,50,57,63,69,74,80,85,90,96],"10":[38,46,54,62,71,79,86,93,100,106,113,120],"12":[45,55,65,75,85,94,103,112,120,128,136,144],"14":[53,64,76,87,99,110,120,130,140,149,158,168],"16":[60,73,86,100,113,126,138,149,160,170,181,192],"18":[68,82,97,112,127,142,155,167,179,191,204,216],"20":[75,91,108,125,142,158,172,186,199,213,226,240],"22":[83,100,119,137,156,174,189,204,219,234,249,264],"24":[90,109,130,150,170,189,206,223,239,255,271,288],"26":[null,118,140,162,184,205,224,242,259,276,294,312],"28":[null,null,151,175,198,221,241,260,279,298,317,336],"30":[null,null,162,187,212,237,258,279,299,319,339,360],"32":[null,null,null,200,227,252,275,298,319,340,362,384],"34":[null,null,null,null,241,268,292,316,339,361,385,408],"36":[null,null,null,null,255,284,310,335,359,383,407,432],"38":[null,null,null,null,null,300,327,353,379,404,430,456],"40":[null,null,null,null,null,316,344,372,399,425,452,480],"50":[null,null,null,null,null,null,430,465,498,531,565,600]}},"gran":{"G":[6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,50],"H":[6,8,10,12,14,16,18,20,22,24,26,28],"rows":{"6":[23,27,32,37,42,47,53,58,63,69,74,79],"8":[30,36,43,50,57,63,70,77,84,92,99,106],"10":[38,46,54,62,71,79,88,97,106,114,123,132],"12":[45,55,65,75,85,94,105,116,127,137,148,159],"14":[53,64,76,87,99,110,123,136,148,160,172,185],"16":[60,73,86,100,113,126,140,155,169,183,197,212],"18":[68,82,97,112,127,142,158,174,190,206,222,238],"20":[75,91,108,125,142,158,176,194,211,229,246,264],"22":[83,100,119,137,156,174,193,213,232,252,271,291],"24":[90,109,130,150,170,189,211,232,253,275,296,317],"26":[null,118,140,162,184,205,229,252,275,297,320,344],"28":[null,null,151,175,198,221,246,271,296,320,345,370],"30":[null,null,162,187,212,237,264,290,317,343,370,397],"32":[null,null,null,200,227,252,281,310,338,366,394,423],"34":[null,null,null,null,241,268,298,329,359,389,419,449],"36":[null,null,null,null,255,284,316,348,380,412,444,476],"38":[null,null,null,null,null,300,334,368,401,435,468,502],"40":[null,null,null,null,null,316,352,387,422,458,493,529],"50":[null,null,null,null,null,null,440,484,528,572,616,661]}},"bjork":{"G":[6,8,10,12,14,16,18,20,22,24,26,28,30,40],"H":[6,8,10,12,14,16,18,20,22,24,26],"rows":{"6":[21,24,29,35,40,45,50,54,59,64,69],"8":[28,32,39,46,53,60,66,72,79,85,92],"10":[35,41,49,58,66,74,83,91,98,106,114],"12":[42,49,59,69,79,89,99,109,118,128,137],"14":[49,57,69,81,93,104,116,127,138,149,160],"16":[56,65,78,92,106,119,132,145,157,170,183],"18":[63,73,88,104,119,134,149,163,177,191,206],"20":[70,81,98,115,132,149,165,181,197,213,229],"22":[77,89,108,127,145,164,182,199,216,234,252],"24":[null,97,118,138,159,179,198,217,236,255,275],"26":[null,106,128,150,172,193,215,236,256,276,297],"28":[null,null,137,161,185,208,231,254,276,298,320],"30":[null,null,null,173,198,223,248,272,295,319,343],"40":[null,null,null,null,264,297,330,362,393,425,458]}}};
+const bracketIdx=(arr,x)=>{let i=0;while(i<arr.length-2&&x>arr[i+1])i++;return i;};
+function volFromTable(sp,G,H){
+  const key=sp==='Tall'?'tall':sp==='Gran'?'gran':'bjork',T=VOLTAB[key];
+  if(!(G>0))return {v:0,why:null};
+  if(!(H>0))return {v:null,why:'Ange medelhöjd'};
+  if(H<T.H[0]||H>T.H[T.H.length-1])return {v:null,why:`Höjden ${nf(H,1)} m ligger utanför tabellen (${T.H[0]}–${T.H[T.H.length-1]} m)`};
+  if(G>T.G[T.G.length-1])return {v:null,why:`Grundytan ${nf(G,1)} ligger utanför tabellen (högst ${T.G[T.G.length-1]} m²/ha)`};
+  if(G<T.G[0]){const r=volFromTable(sp,T.G[0],H);return r.v==null?r:{v:r.v*G/T.G[0],why:null,prop:true};}   // volymen är proportionell mot grundytan
+  const gi=bracketIdx(T.G,G),hi=bracketIdx(T.H,H),g0=T.G[gi],g1=T.G[gi+1],h0=T.H[hi],h1=T.H[hi+1];
+  const cell=(g,h)=>T.rows[String(g)][T.H.indexOf(h)];
+  const tg=(G-g0)/(g1-g0),th=(H-h0)/(h1-h0);
+  const parts=[[(1-tg)*(1-th),cell(g0,h0)],[(1-tg)*th,cell(g0,h1)],[tg*(1-th),cell(g1,h0)],[tg*th,cell(g1,h1)]];
+  if(parts.some(([w,v])=>w>1e-9&&v==null))return {v:null,why:'Kombinationen av grundyta och höjd ligger utanför tabellen'};
+  return {v:parts.reduce((a,[w,v])=>a+(w>1e-9?w*v:0),0),why:null};
+}
+let volOpen=false;
+function volCalcHTML(id){
+  const S=plotSummary(id),p=eff(id),sp=['Tall','Gran','Björk','Övrigt'];
+  const g=k=>S.rel?Math.round(S.rel.g[k]*10)/10:'';
+  const hh=k=>S.height&&S.height.by[k]?Math.round(S.height.by[k].mean*10)/10:(p.hojd!=null?p.hojd:'');
+  return `<details id="volcalc" ${volOpen?'open':''} style="margin:10px 0"><summary style="cursor:pointer;color:var(--g);font-weight:600">Volym enligt tabell (Nyyssönen)</summary>
+    <div class="small muted" style="margin:6px 0">Grundyta från relaskopet och medelhöjd ger stamvolym med bark per hektar, enligt tabellerna på ditt kort. Värdena fylls i från dina mätningar och kan ändras. Övrigt räknas med björktabellen. Under tabellens lägsta grundyta (6 m²/ha) räknas volymen proportionellt, eftersom tabellen är proportionell mot grundytan.</div>
+    <table><tr><th></th><th class="n">Grundyta m²/ha</th><th class="n">Medelhöjd m</th><th class="n">Volym m³/ha</th></tr>
+    ${sp.map(k=>`<tr><td>${k}</td><td class="n"><input id="vc_g_${k}" type="number" step="0.1" min="0" inputmode="decimal" style="width:84px;font:inherit;padding:5px" value="${g(k)}"></td><td class="n"><input id="vc_h_${k}" type="number" step="0.1" min="0" inputmode="decimal" style="width:84px;font:inherit;padding:5px" value="${hh(k)}"></td><td class="n" id="vc_v_${k}">–</td></tr>`).join('')}
+    <tr><td colspan="3"><b>Totalt</b></td><td class="n"><b id="vc_tot">–</b></td></tr></table>
+    <label style="display:flex;gap:8px;align-items:center;margin:8px 0;font-size:13px"><input type="checkbox" id="vc_gran5"> Ojämn granskog: dra av 5 % (kortets regel för södra halvan av landet)</label>
+    <div class="small muted" id="vc_msg"></div>
+    <div class="small" id="vc_laser"></div>
+    <button class="btn" data-do="usevol" type="button">Använd som beståndets volym</button></details>`;
+}
+function volCalcCompute(){
+  const sp=['Tall','Gran','Björk','Övrigt'],num=id=>{const e=document.getElementById(id);return e&&e.value!==''?Number(String(e.value).replace(',','.')):0;};
+  const g5=document.getElementById('vc_gran5');
+  const rows={};let total=0,missing=[];
+  sp.forEach(k=>{
+    const G=num('vc_g_'+k),H=num('vc_h_'+k);
+    if(!(G>0)){rows[k]={G:0,H,v:0};return;}
+    const r=volFromTable(k,G,H);
+    let v=r.v;if(v!=null&&k==='Gran'&&g5&&g5.checked)v*=0.95;
+    rows[k]={G,H,v,why:r.why};
+    if(v==null)missing.push(`${k}: ${r.why}`);else total+=v;
+  });
+  return {rows,total,missing};
+}
+function volCalcUpdate(){
+  if(!document.getElementById('volcalc')||selId==null)return;
+  const r=volCalcCompute();
+  ['Tall','Gran','Björk','Övrigt'].forEach(k=>{const c=document.getElementById('vc_v_'+k);if(c)c.textContent=r.rows[k].G>0?(r.rows[k].v!=null?nf(r.rows[k].v,0):'–'):'';});
+  const t=document.getElementById('vc_tot');if(t)t.textContent=nf(r.total,0);
+  const m=document.getElementById('vc_msg');if(m){m.textContent=r.missing.join(' · ');m.style.color='#9c2018';}
+  const l=document.getElementById('vc_laser');if(l){const lv=baseOf(selId).vol;l.textContent=r.total>0?`Laserdata: ${nf(lv,0)} m³/ha. Ditt värde: ${nf(r.total,0)} m³/ha (${r.total>=lv?'+':''}${nf(r.total-lv,0)}).`:'';}
+}
+
 /* ---------- Delad plan (Firebase): inloggning och synk mellan flera användare ---------- */
 const FIREBASE_VER='12.17.1';
 const FIREBASE_CONFIG_EMBEDDED={"apiKey": "AIzaSyCXy71I85lHotJYyyGB6dSrCMUBipLfsP0", "authDomain": "skogsbruksplan-73d0f.firebaseapp.com", "projectId": "skogsbruksplan-73d0f", "storageBucket": "skogsbruksplan-73d0f.firebasestorage.app", "messagingSenderId": "688922986747", "appId": "1:688922986747:web:d859186722fb2f8677885e"};   // Firebase-konfigurationen är inte hemlig – skyddet ligger i inloggningen och Firestore-reglerna
@@ -2182,7 +2617,8 @@ function applyRemote(kind){
 }
 function remoteRender(){
   restyle();renderActs();renderTable();updateHeader();
-  if(!(formState||editMode||moveAid||suggest||plotForm))renderCard();
+  const inCalc=document.activeElement&&document.activeElement.closest&&document.activeElement.closest('#volcalc');
+  if(!(formState||editMode||moveAid||suggest||plotForm||inCalc))renderCard();
   const ae=document.activeElement;
   if(!(ae&&ae.closest&&ae.closest('#pane-data')))renderData();
 }
@@ -2209,6 +2645,7 @@ function cloudPush(){
   updateCloudChip();
 }
 function cloudSectionHTML(){
+  if(DEMO_BANNER)return '<h3>Testversion</h3><p class="small muted">Den här versionen är fristående. Inloggning och delning är avstängda, och allt du lägger in sparas bara i den här webbläsaren.</p>';
   if(!CLOUD.cfg){
     return `<h3>Delad plan</h3>
     <p class="small muted">Inloggning och gemensam åtgärdslogg för flera användare är inte påslagen. Klistra in Firebase-konfigurationen (raden med apiKey, projectId och så vidare) för att slå på den.</p>
@@ -2221,6 +2658,10 @@ function cloudSectionHTML(){
     ${FIREBASE_CONFIG_EMBEDDED?'':'<p class="small"><button class="lnk red" data-do="clearcfg">Ta bort konfigurationen</button></p>'}`;
 }
 $('#cloudchip').onclick=()=>showTab('data');
+$('#actbtn').onclick=openActions;
+$('#quickbtn').onclick=()=>{closeOverlays(false);openQuick();};
+$('#mclose').onclick=closeMeasure;
+window.addEventListener('resize',()=>{if(meas)positionLines();});
 window.addEventListener('online',()=>{updateCloudChip();});
 window.addEventListener('offline',()=>{updateCloudChip();});
 
@@ -2237,6 +2678,8 @@ renderLegend();renderCard();renderActs();renderTable();renderData();
 setBase(prefs.base,true);setOverlay('prop',prefs.prop,true);setOverlay('ids',prefs.ids,true);
 ['forn','nat','n2k'].forEach(k=>setLR(k,!!prefs[k]));
 setSize(2);
+renderLooseMarkers();renderPtMarkers();
+$('#demobar').hidden=!DEMO_BANNER;
 cloudBoot();
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost')){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 </script>
